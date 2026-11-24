@@ -198,6 +198,7 @@ button.sb-item:hover { background: var(--bg-hover); color: var(--fg); }
 .ftab-close:hover { background: var(--bg-hover); color: var(--fg); }
 .tab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--err); }
 .editor-host { flex: 1; min-height: 0; position: relative; }
+.editor-mount { position: absolute; inset: 0; }
 .editor-fallback { position: absolute; inset: 0; overflow: hidden; padding: 4px 0 0 64px; background: var(--bg); }
 .editor-fallback pre { margin: 0; font-family: var(--mono); font-size: 13px; line-height: 19px; color: var(--fg-soft); opacity: 0.75; }
 .binary-view { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 4px; color: var(--fg-soft); padding: 24px; text-align: center; }
@@ -418,13 +419,16 @@ button.sb-item:hover { background: var(--bg-hover); color: var(--fg); }
 .mobile-tabs button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; }
 .mobile-tabs button.active { color: var(--fg); border-bottom-color: var(--accent); }
 .mobile-main { flex: 1; display: flex; min-height: 0; }
-.mobile-main > * { flex: 1; width: auto !important; height: auto !important; }
+.mobile-main > .mobile-view { flex: 1; display: flex; min-width: 0; min-height: 0; }
+.mobile-main > .mobile-view[hidden] { display: none; }
+.mobile-view > * { flex: 1; width: auto !important; height: auto !important; min-width: 0; }
 .narrow .sidebar { width: auto; }
 @media (max-width: 1180px) {
   .hide-sm { display: none; }
   .project-name { width: 140px; }
 }
 @media (max-width: 860px) {
+  .preview-toolbar { height: auto; min-height: 40px; flex-wrap: wrap; padding: 4px 8px; overflow: visible; }
   .target, .project-name { display: none; }
   .header { gap: 2px; }
   .welcome-actions { grid-template-columns: 1fr; }

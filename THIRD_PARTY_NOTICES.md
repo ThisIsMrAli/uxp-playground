@@ -16,6 +16,10 @@ The built site bundles the following packages. Licenses as published on the npm 
 | fflate | 0.8.3 | MIT | Plugin .zip export |
 | @types/photoshop | 27.11.0 | MIT (DefinitelyTyped) | Editor autocomplete for `photoshop` |
 | @adobe/cc-ext-uxp-types | 7.3.1 | Apache-2.0 (LICENSE file and file headers; the package.json has no `license` field) | Editor autocomplete for `uxp` |
-| eslint-plugin-uxp-lint | 0.1.0 (sibling repo) | MIT | UXP lint rules, when present at build time |
+| eslint-plugin-uxp-lint | 0.2.0 (sibling repo) | MIT | UXP lint rules, when present at build time |
+
+## Example plugins
+
+`public/examples/` contains sample plugins copied unchanged from [AdobeDocs/uxp-photoshop-plugin-samples](https://github.com/AdobeDocs/uxp-photoshop-plugin-samples) at commit `d937f1a36f3a2149a92c3f5af56181a3caaae036`. Each example keeps its own license (Apache-2.0 or MIT, as published in that sample's folder) and a `SOURCE.md` naming its origin. The gallery shows the license on every card.
 
 "Adobe", "Photoshop", "InDesign", "Premiere Pro" and "UXP" are trademarks of Adobe. This project is not affiliated with or endorsed by Adobe.

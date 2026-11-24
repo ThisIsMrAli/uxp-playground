@@ -130,7 +130,7 @@ export function Editor({ files, active, diagnostics, onChange, revision, theme, 
     });
   }, [diagnostics, revision]);
 
-  return <div className="editor-host" ref={host} data-testid="editor" />;
+  return <div className="editor-mount" ref={host} data-testid="editor" />;
 }
 
 export function revealLine(path: string, line: number, column: number) {

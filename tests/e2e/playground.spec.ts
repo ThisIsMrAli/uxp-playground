@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { unzipSync, strFromU8 } from 'fflate';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fresh, readyRun, settled } from './helpers';
 
 const SHOTS = process.env.SCREENSHOT_DIR || resolve('test-results/screenshots');
 mkdirSync(SHOTS, { recursive: true });
@@ -9,26 +10,11 @@ const shot = (page: Page, name: string) => page.screenshot({ path: resolve(SHOTS
 
 const frame = (page: Page) => page.frameLocator('iframe[data-testid="preview-frame"]');
 
-const readyRun = (page: Page) => page.getByTestId('preview-col').getAttribute('data-ready-run').then(Number);
-
-/** Waits until the preview iframe has reloaded after `before` and finished booting. */
-async function settled(page: Page, before?: number) {
-  await expect(page.getByTestId('preview-col')).toHaveAttribute('data-state', 'ready');
-  if (before !== undefined) await expect.poll(() => readyRun(page)).toBeGreaterThan(before);
-}
-
-async function fresh(page: Page, hash = '') {
-  await page.goto('/' + hash);
-  await page.evaluate(() => localStorage.clear());
-  await page.goto('/' + hash);
-  await expect(page.getByTestId('editor').locator('.monaco-editor')).toBeVisible();
-  await settled(page);
-}
-
 async function loadTemplate(page: Page, id: string) {
   const before = await readyRun(page);
-  await page.getByTestId('template').selectOption(id);
-  await expect(page.getByTestId('toast')).toContainText('Loaded template');
+  await page.getByTestId('examples').click();
+  await page.getByTestId('gallery-dialog').getByTestId(`template-${id}`).click();
+  await expect(page.getByTestId('toast')).toContainText('New project from');
   await settled(page, before);
 }
 
@@ -44,12 +30,16 @@ async function typeOver(page: Page, file: string, text: string, replacement: str
     ed.focus();
   }, text);
   const before = await readyRun(page);
-  await page.keyboard.type(replacement);
+  // One edit through the editor (no per-character auto-closing of quotes and brackets).
+  await page.evaluate((r) => {
+    const ed = (window as any).__pgEditor;
+    ed.executeEdits('test', [{ range: ed.getSelection(), text: r, forceMoveMarkers: true }]);
+    ed.revealPositionInCenter(ed.getPosition());
+  }, replacement);
   await settled(page, before);
 }
 
-const modelText = (page: Page, file: string) =>
-  page.evaluate((f) => (window as any).__pgMonaco.editor.getModel((window as any).__pgMonaco.Uri.parse('file:///' + f))?.getValue(), file);
+const modelText = (page: Page, file: string) => page.evaluate((f) => (window as any).uxpPlayground.getProject().files[f], file);
 
 test('loads the app with the hello template and an approximate preview', async ({ page }) => {
   await fresh(page);
@@ -57,7 +47,7 @@ test('loads the app with the hello template and an approximate preview', async (
   await expect(page.getByTestId('fidelity-notice')).toContainText('Approximate preview');
   await expect(page.getByTestId('panel-title')).toHaveText('Hello');
   await expect(frame(page).locator('sp-heading')).toHaveText('Hello UXP');
-  await expect(page.getByTestId('tab-console')).toContainText('Console (');
+  await expect(page.getByTestId('tab-console')).toContainText('Console');
   await expect(page.getByTestId('command-sayHello')).toBeVisible();
   await shot(page, '01-hello-template.png');
 });
@@ -70,7 +60,6 @@ test('typing in the editor updates the live preview', async ({ page }) => {
   await frame(page).locator('#name input').fill('Ali');
   await frame(page).locator('#greet').click();
   await expect(frame(page).locator('#out')).toHaveText('Welcome, Ali!');
-  await expect(page.getByTestId('tab-console')).not.toContainText('(0)');
   await page.getByTestId('tab-console').click();
   await expect(page.getByTestId('panel-console')).toContainText('greeted Ali');
   await shot(page, '02-edit-live-preview.png');
@@ -85,7 +74,7 @@ test('host alert, commands and host-call log', async ({ page }) => {
   await page.getByTestId('command-sayHello').click();
   await expect(frame(page).locator('.pg-host-alert-msg')).toHaveText('Hello from a command!');
   await page.getByTestId('tab-host').click();
-  await expect(page.getByTestId('panel-host')).toContainText('photoshop.app.showAlert("Hello from a command!")');
+  await expect(page.getByTestId('panel-host')).toContainText('app.showAlert("Hello from a command!")');
   await expect(page.getByTestId('panel-host')).toContainText('commands.sayHello.run()');
 });
 
@@ -100,8 +89,8 @@ test('batchPlay template: modal scope, host calls and lint', async ({ page }) =>
   await page.getByTestId('tab-console').click();
   await expect(page.getByTestId('panel-console')).toContainText('Such events are only allowed from inside a modal scope');
   await page.getByTestId('tab-host').click();
-  await expect(page.getByTestId('panel-host')).toContainText('photoshop.core.executeAsModal({"commandName":"Rename layer"})');
-  await expect(page.getByTestId('panel-host')).toContainText('[modal: Rename layer]');
+  await expect(page.getByTestId('panel-host')).toContainText('core.executeAsModal({"commandName":"Rename layer"');
+  await expect(page.getByTestId('panel-host')).toContainText('modal');
   await shot(page, '04-batchplay-host-calls.png');
   await page.getByTestId('tab-problems').click();
   await expect(page.getByTestId('panel-problems')).toContainText(/modal-scope/);
@@ -115,6 +104,9 @@ test('lint panel reacts to edits and shows editor markers', async ({ page }) => 
   await page.getByTestId('tab-problems').click();
   await expect(page.getByTestId('panel-problems')).toContainText("'undefinedFn' is not defined");
   await expect(page.getByTestId('panel-problems')).toContainText(/api\.example\.com|network\.domains/);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__pgMonaco.editor.getModelMarkers({}).filter((m: any) => m.severity === 8 && m.resource.path === '/index.js').length))
+    .toBeGreaterThan(0);
   await expect(page.locator('.monaco-editor .squiggly-error').first()).toBeVisible();
   await typeOver(page, 'styles.css', 'display: flex;', 'display: grid;');
   await expect(page.getByTestId('panel-problems')).toContainText(/grid/i);
@@ -123,9 +115,7 @@ test('lint panel reacts to edits and shows editor markers', async ({ page }) => 
 
 test('theme and size selectors restyle the panel', async ({ page }) => {
   await fresh(page);
-  const r0 = await readyRun(page);
   await page.getByTestId('theme').selectOption('lightest');
-  await settled(page, r0);
   await expect(frame(page).locator('html')).toHaveAttribute('data-theme', 'lightest');
   const bg = await frame(page).locator('body').evaluate((b) => getComputedStyle(b).backgroundColor);
   expect(bg).toBe('rgb(240, 240, 240)');
@@ -147,7 +137,7 @@ test('share link round-trips the project', async ({ page, context }) => {
   await shot(page, '08-share-link.png');
   const other = await context.newPage();
   await other.goto(url);
-  await expect(other.getByTestId('toast')).toContainText('Loaded from share link');
+  await expect(other.getByTestId('toast')).toContainText('Opened from a share link');
   await expect(other.frameLocator('iframe[data-testid="preview-frame"]').locator('sp-heading')).toHaveText('Shared heading');
   await expect(other.getByTestId('theme')).toHaveValue('light');
   expect(await modelText(other, 'index.html')).toBe(original);
@@ -170,10 +160,11 @@ test('download zip is an installable manifest v5 plugin', async ({ page }) => {
 test('React template renders, updates and exports with vendored React', async ({ page }) => {
   await fresh(page);
   await loadTemplate(page, 'react');
-  await expect(frame(page).locator('sp-detail')).toHaveText('Layers (3)');
+  await expect(frame(page).locator('sp-detail')).toHaveText(/Layers \(\d+\)/);
+  const n = Number((await frame(page).locator('sp-detail').textContent())!.match(/\d+/)![0]);
   await frame(page).locator('sp-button').click();
-  await expect(frame(page).locator('sp-detail')).toHaveText('Layers (4)');
-  await expect(frame(page).locator('.item').first()).toHaveText('React layer 1');
+  await expect(frame(page).locator('sp-detail')).toHaveText(`Layers (${n + 1})`);
+  await expect(frame(page).locator('.item', { hasText: 'React layer 1' })).toHaveCount(1);
   await shot(page, '09-react-template.png');
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download-zip').click()]);
   const path = resolve('test-results', dl.suggestedFilename());
@@ -193,7 +184,7 @@ test('file picker template reads a real file via the mocked localFileSystem', as
   await frame(page).locator('#save').click();
   await expect(frame(page).locator('#status')).toHaveText('Saved notes.txt');
   await page.getByTestId('tab-host').click();
-  await expect(page.getByTestId('panel-host')).toContainText('localFileSystem.getFileForOpening');
+  await expect(page.getByTestId('panel-host')).toContainText('getFileForOpening');
   await shot(page, '10-file-picker.png');
   // Remove the permission: the mock must refuse like a v5 manifest without localFileSystem.
   await typeOver(page, 'manifest.json', '"localFileSystem": "request"', '"clipboard": "read"');

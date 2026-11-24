@@ -39,12 +39,15 @@ export function ShareDialog({ project, base, origin, onClose, onCopied }: { proj
           </div>
         )}
         {origin && (
-          <div className="row">
-            <input readOnly className="grow mono" value={origin} onFocus={(e) => e.target.select()} aria-label="GitHub link" />
-            <button className="btn" onClick={() => copy(origin, 'GitHub link')}>
-              <Icon name="github" size={14} /> Copy GitHub link
-            </button>
-          </div>
+          <>
+            <p className="muted small">Short link to the original {origin.includes('#github=') ? 'GitHub folder' : origin.includes('#example=') ? 'example' : 'template'} (without your edits):</p>
+            <div className="row">
+              <input readOnly className="grow mono" value={origin} onFocus={(e) => e.target.select()} aria-label="Link to the original" data-testid="origin-url" />
+              <button className="btn" onClick={() => copy(origin, 'Original link')}>
+                <Icon name={origin.includes('#github=') ? 'github' : 'copy'} size={14} /> Copy
+              </button>
+            </div>
+          </>
         )}
       </section>
       <section className="share-sec">

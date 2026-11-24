@@ -29,13 +29,22 @@ import { Welcome } from './components/Welcome';
 import runtimeSrc from '../runtime/runtime.js?raw';
 import panelCss from '../runtime/panel.css?raw';
 import shimCss from '../runtime/shim.css?raw';
-import vendorSrc from '../generated/react-bundle.js?raw';
 import psApi from '../generated/ps-api.json';
 
 // Monaco (about 4 MB) loads in its own chunk after first paint; a read-only view shows the file until then.
 const Editor = lazy(() => import('./Editor').then((m) => ({ default: m.Editor })));
 
-const ASSETS: RuntimeAssets = { runtime: runtimeSrc, panelCss, shimCss, vendor: vendorSrc, psApi };
+const ASSETS: RuntimeAssets = { runtime: runtimeSrc, panelCss, shimCss, vendor: null, psApi };
+/** The vendored React bundle (~220 KB) only ships to projects that use React, so it is fetched on demand. */
+let vendorLoading: Promise<string> | null = null;
+function loadVendor(): Promise<string> {
+  vendorLoading ??= import('../generated/react-bundle.js?raw').then((m) => (ASSETS.vendor = m.default));
+  return vendorLoading;
+}
+/** Source-level check (before compiling): JSX files or a React import mean the preview needs the vendor bundle. */
+function mayUseReact(files: Record<string, string>): boolean {
+  return Object.entries(files).some(([k, v]) => /\.(jsx|tsx)$/i.test(k) || (/\.(js|mjs|cjs|ts)$/i.test(k) && /['"]react(-dom)?(\/[\w-]+)?['"]/.test(v)));
+}
 const THEMES: Theme[] = ['darkest', 'dark', 'medium', 'light', 'lightest'];
 const SIZES = [
   { id: 'manifest', label: 'Manifest size' },
@@ -118,6 +127,9 @@ export function App() {
   const [dialog, setDialog] = useState<DialogId>(null);
   const [palette, setPalette] = useState<string | null>(null);
   const [prefs, setPrefsState] = useState<UiPrefs>(loadPrefs);
+  // A #github / #gist / #example link (or a large autosave) loads after first paint: the starter is not run meanwhile,
+  // so embeds on docs pages never flash the wrong plugin.
+  const [routePending, setRoutePending] = useState(() => init.pending === 'idb' || (!!init.pending && ['github', 'gist', 'example'].includes(init.pending.kind)));
   const [welcome, setWelcome] = useState(() => !EMBED && init.source === 'template' && !loadPrefs().seenWelcome);
   const [banner, setBanner] = useState<Banner | null>(init.source === 'bad-link' ? { kind: 'error', text: 'This share link is damaged or incomplete, so the starter panel was opened instead.' } : null);
   const [importReport, setImportReport] = useState<ImportReport | null>(null);
@@ -149,6 +161,8 @@ export function App() {
   // ---------------------------------------------------------------- project loading
   const loadProject = useCallback(
     (p: Project, why: string | null, opts: { report?: ImportReport | null; origin?: string | null; keepHash?: boolean } = {}) => {
+      setRoutePending(false);
+      setReady(false); // the preview shows the previous project until the new build runs
       setProject(p);
       setRevision((r) => r + 1);
       setTabs([...new Set(['manifest.json', p.active])].filter((f) => p.files[f] != null));
@@ -292,12 +306,16 @@ export function App() {
 
   // Hash routes and IndexedDB autosave resolve after first paint.
   useEffect(() => {
-    lint.current = new LintClient();
+    // A preview-only embed shows no problems, so it skips the ESLint worker (2.2 MB).
+    if (!(EMBED && EMBED_VIEW === 'preview' && params.get('console') !== '1')) lint.current = new LintClient();
     const pending = init.pending;
-    const fail = (what: string) => (e: any) => setBanner({ kind: 'error', text: `Could not open ${what}: ${e?.message || e}`, details: ['The starter panel is open instead.'] });
-    if (pending === 'idb') loadSavedAsync().then((p) => p && loadProject(p, null));
-    else if (pending?.kind === 'github') openGithub(pending.spec).catch(fail(pending.spec));
-    else if (pending?.kind === 'gist') openGist(pending.id).catch(fail('gist ' + pending.id));
+    const fail = (what: string) => (e: any) => {
+      setRoutePending(false);
+      setBanner({ kind: 'error', text: `Could not open ${what}: ${e?.message || e}`, details: ['The starter panel is open instead.'] });
+    };
+    if (pending === 'idb') loadSavedAsync().then((p) => (p ? loadProject(p, null) : setRoutePending(false)), () => setRoutePending(false));
+    else if (pending?.kind === 'github') openGithub(pending.spec).catch(fail(pending.spec)).finally(() => setRoutePending(false));
+    else if (pending?.kind === 'gist') openGist(pending.id).catch(fail('gist ' + pending.id)).finally(() => setRoutePending(false));
     else if (pending?.kind === 'template') {
       const t = TEMPLATES.find((x) => x.id === pending.id);
       if (t) loadProject(t.build(), null, { keepHash: true, origin: location.href });
@@ -311,7 +329,10 @@ export function App() {
           return openExample(m);
         })
         .catch(fail('example'))
-        .finally(() => setLoading(null));
+        .finally(() => {
+          setLoading(null);
+          setRoutePending(false);
+        });
     } else if (init.source === 'share link') say('Opened from a share link');
     const mq = matchMedia('(max-width: 860px)');
     const dq = matchMedia('(prefers-color-scheme: dark)');
@@ -341,7 +362,13 @@ export function App() {
   }, [sizeId, manifest]);
 
   // ---------------------------------------------------------------- preview build
+  const [vendorReady, setVendorReady] = useState(false);
   const rebuild = useCallback(() => {
+    if (!ASSETS.vendor && mayUseReact(project.files)) {
+      setReady(false);
+      loadVendor().then(() => setVendorReady(true), (e) => say('Could not load React for the preview: ' + (e?.message || e), 'error'));
+      return;
+    }
     let b: PreviewBuild;
     try {
       b = buildPreview(project, ASSETS);
@@ -359,14 +386,15 @@ export function App() {
     setEntrypoints({ panels: [], commands: [], menus: {} });
     setMissingPackages(b.unresolvedPackages);
     setRunId((r) => r + 1);
-  }, [project]);
+  }, [project, say]);
 
   useEffect(() => {
+    if (routePending) return;
     if (!autoRun && build) return;
     const t = window.setTimeout(rebuild, build ? 400 : 0);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.files, project.target, autoRun]);
+  }, [project.files, project.target, autoRun, vendorReady, routePending]);
 
   // Lint (worker, debounced).
   useEffect(() => {
@@ -480,7 +508,11 @@ export function App() {
       return (l.length > 1000 ? l.slice(-800) : l).concat(e);
     });
   }, []);
-  const onReady = useCallback(() => setReady(true), []);
+  const [readyCount, setReadyCount] = useState(0);
+  const onReady = useCallback(() => {
+    setReady(true);
+    setReadyCount((n) => n + 1);
+  }, []);
   const onMissingPackage = useCallback((name: string) => setMissingPackages((m) => (m.includes(name) ? m : [...m, name])), []);
   const onBatchPlayResult = useCallback(
     (r: any) => {
@@ -494,8 +526,8 @@ export function App() {
   // ---------------------------------------------------------------- actions
   const shareBase = location.origin + location.pathname;
   const projectForShare = useMemo(() => ({ ...project, size: sizeId === 'manifest' ? null : size }), [project, sizeId, size]);
-  const doZip = useCallback(() => {
-    const r = buildPluginZip(project, ASSETS.vendor);
+  const doZip = useCallback(async () => {
+    const r = buildPluginZip(project, mayUseReact(project.files) ? await loadVendor() : null);
     download(r.fileName, r.zip as unknown as BlobPart, 'application/zip');
     if (r.problems.length) {
       setBanner({ kind: 'warn', text: `Downloaded ${r.fileName}, but UXP Developer Tool may reject it:`, details: r.problems });
@@ -632,8 +664,9 @@ export function App() {
           lintEngine: s.lintInfo
         };
       },
-      exportZipBase64() {
-        const r = buildPluginZip(stateRef.current.project, ASSETS.vendor);
+      async exportZipBase64() {
+        const p = stateRef.current.project;
+        const r = buildPluginZip(p, mayUseReact(p.files) ? await loadVendor() : null);
         return bytesToBase64(r.zip);
       }
     };
@@ -731,7 +764,7 @@ export function App() {
         <span className="spacer" />
         {READ_ONLY && <span className="pill">Read-only</span>}
       </div>
-      <div className="editor-host" data-testid="editor">
+      <div className="editor-host" data-testid="editor-pane">
         {activeIsBinary ? (
           <BinaryView path={project.active} content={project.files[project.active]} />
         ) : (
@@ -867,7 +900,7 @@ export function App() {
   );
 
   const previewCol = (
-    <section className="preview-col" aria-label="Preview" data-testid="preview-col" data-state={ready ? 'ready' : 'loading'} data-errors={runtimeErrors}>
+    <section className="preview-col" aria-label="Preview" data-testid="preview-col" data-state={ready ? 'ready' : 'loading'} data-errors={runtimeErrors} data-ready-run={readyCount}>
       {previewToolbar}
       {previewBody}
     </section>
@@ -920,9 +953,6 @@ export function App() {
           <span className="logo-mark small" aria-hidden="true">Ux</span>
           <strong className="embed-title">{project.name}</strong>
           <span className="spacer" />
-          <button className="btn small" onClick={rebuild} data-testid="run">
-            <Icon name="play" size={12} /> Run
-          </button>
           <a className="btn small" href={openUrl} target="_blank" rel="noopener" data-testid="open-in-playground">
             Open in Playground <Icon name="external" size={12} />
           </a>
@@ -1052,10 +1082,12 @@ export function App() {
             ))}
           </nav>
           <main className="mobile-main" id="main-editor">
-            {mobileView === 'files' && sidebar}
-            {mobileView === 'code' && editor}
-            {mobileView === 'preview' && previewCol}
-            {mobileView === 'output' && bottom}
+            {/* All views stay mounted so the preview keeps running (and logging) while you edit. */}
+            {(['files', 'code', 'preview', 'output'] as MobileView[]).map((v) => (
+              <div key={v} className="mobile-view" hidden={mobileView !== v}>
+                {v === 'files' ? sidebar : v === 'code' ? editor : v === 'preview' ? previewCol : bottom}
+              </div>
+            ))}
           </main>
         </>
       ) : (
