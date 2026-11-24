@@ -32,8 +32,9 @@ describe('share links', () => {
   });
   it('rejects garbage and unsafe file names', () => {
     expect(decodeProject('not-valid')).toBeNull();
-    const p = sanitizeProject({ files: { '../evil.js': 'x', '/abs.js': 'y', 'ok.js': 'z', 'bad name.js': 'w' } });
-    expect(Object.keys(p!.files)).toEqual(['ok.js']);
+    const p = sanitizeProject({ files: { '../evil.js': 'x', '/abs.js': 'y', 'ok.js': 'z', 'bad|name.js': 'w', 'a\\b.js': 'v', 'my icons/dark mode.png': 'data:image/png;base64,AA==' } });
+    // Spaces are allowed (real plugins ship files like "my icons/dark mode.png"); traversal and reserved characters are not.
+    expect(Object.keys(p!.files)).toEqual(['ok.js', 'my icons/dark mode.png']);
     expect(sanitizeProject({ files: {} })).toBeNull();
     const enc = encodeProject({ ...templateById('hello').build(), theme: 'neon' as any });
     expect(decodeProject(enc)!.theme).toBe('dark');

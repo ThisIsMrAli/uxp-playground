@@ -40,3 +40,13 @@ sp-menu, sp-menu-item { display: block; }
 .pg-host-alert-title { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #aaa; margin-bottom: 6px; }
 .pg-host-alert-msg { margin-bottom: 12px; white-space: pre-wrap; word-break: break-word; }
 .pg-host-alert-box button { background: #1473e6; color: #fff; border: 0; border-radius: 14px; padding: 5px 16px; font-weight: 700; cursor: pointer; }
+sp-action-group { display: inline-flex; flex-wrap: wrap; align-items: center; }
+sp-action-group > * { margin-right: 4px; }
+sp-tooltip { display: none; }
+sp-menu-divider { display: block; height: 1px; background: var(--pg-border); margin: 4px 0; }
+dialog { background: var(--pg-bg); color: var(--pg-fg); border: 1px solid var(--pg-border); border-radius: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.5); padding: 16px; }
+dialog[data-uxp-title]::before { content: attr(data-uxp-title); display: block; font-weight: 700; margin: -4px 0 10px; color: var(--pg-fg-strong); }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+
+/* Playground: placeholder for plugins whose manifest "main" is a script (no panel UI). */
+.pg-headless { display: flex; flex-direction: column; gap: 6px; margin: 16px; padding: 12px; border: 1px dashed var(--uxp-host-border-color, #555); border-radius: 4px; font-size: 12px; line-height: 1.5; color: var(--uxp-host-text-color, #ccc); }

@@ -42,6 +42,8 @@ export interface UxpLintProvider {
   fallback: boolean;
   covers: LintEngineInfo['covers'];
   buildConfig(ctx: ProviderContext): any[];
+  /** Documentation URL for a rule id the provider reports (from the rule's meta.docs.url). */
+  docsUrl?(ruleId: string): string | undefined;
 }
 
 export function severityFromEslint(sev: number): Diagnostic['severity'] {

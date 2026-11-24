@@ -1,0 +1,193 @@
+{
+ "generated": "2026-11-24",
+ "source": "Examples are Adobe's samples from github.com/AdobeDocs/uxp-photoshop-plugin-samples (commit d937f1a), kept under their MIT/Apache-2.0 licenses.",
+ "examples": [
+  {
+   "id": "hello-world-panel",
+   "title": "Hello World panel",
+   "description": "Lists the layer names of the active document in a panel and shows an alert. Adobe's smallest panel sample.",
+   "category": "Basics",
+   "tags": [
+    "panel",
+    "DOM",
+    "showAlert"
+   ],
+   "file": "hello-world-panel.json",
+   "origin": {
+    "repo": "AdobeDocs/uxp-photoshop-plugin-samples",
+    "path": "hello-world-panel-js-sample",
+    "commit": "d937f1a36f3a2149a92c3f5af56181a3caaae036",
+    "license": "Apache-2.0",
+    "url": "https://github.com/AdobeDocs/uxp-photoshop-plugin-samples/tree/d937f1a/hello-world-panel-js-sample"
+   }
+  },
+  {
+   "id": "vanilla",
+   "title": "Vanilla JS starter",
+   "description": "Tracks open documents with action.addNotificationListener and changes them inside core.executeAsModal.",
+   "category": "Basics",
+   "tags": [
+    "events",
+    "executeAsModal",
+    "DOM"
+   ],
+   "file": "vanilla.json",
+   "origin": {
+    "repo": "AdobeDocs/uxp-photoshop-plugin-samples",
+    "path": "vanilla-js-sample",
+    "commit": "d937f1a36f3a2149a92c3f5af56181a3caaae036",
+    "license": "Apache-2.0",
+    "url": "https://github.com/AdobeDocs/uxp-photoshop-plugin-samples/tree/d937f1a/vanilla-js-sample"
+   }
+  },
+  {
+   "id": "layer-creation",
+   "title": "Layer creation",
+   "description": "Creates a text layer from a text field or from a file you pick.",
+   "category": "Photoshop",
+   "tags": [
+    "text layer",
+    "batchPlay",
+    "file picker"
+   ],
+   "file": "layer-creation.json",
+   "origin": {
+    "repo": "AdobeDocs/uxp-photoshop-plugin-samples",
+    "path": "layer-creation-js-sample",
+    "commit": "d937f1a36f3a2149a92c3f5af56181a3caaae036",
+    "license": "Apache-2.0",
+    "url": "https://github.com/AdobeDocs/uxp-photoshop-plugin-samples/tree/d937f1a/layer-creation-js-sample"
+   }
+  },
+  {
+   "id": "direct-action",
+   "title": "Menu command (no panel)",
+   "description": "A plugin with only a menu command: writes the layer names of the active document to a file.",
+   "category": "Commands",
+   "tags": [
+    "command",
+    "headless",
+    "file system"
+   ],
+   "file": "direct-action.json",
+   "origin": {
+    "repo": "AdobeDocs/uxp-photoshop-plugin-samples",
+    "path": "direct-action-js-sample",
+    "commit": "d937f1a36f3a2149a92c3f5af56181a3caaae036",
+    "license": "Apache-2.0",
+    "url": "https://github.com/AdobeDocs/uxp-photoshop-plugin-samples/tree/d937f1a/direct-action-js-sample"
+   }
+  },
+  {
+   "id": "invisible-plugin",
+   "title": "Invisible plugin",
+   "description": "No UI and no menu items: shows an alert from entrypoints.setup plugin.create().",
+   "category": "Commands",
+   "tags": [
+    "headless",
+    "plugin.create"
+   ],
+   "file": "invisible-plugin.json",
+   "origin": {
+    "repo": "AdobeDocs/uxp-photoshop-plugin-samples",
+    "path": "invisible-plugin-sample",
+    "commit": "d937f1a36f3a2149a92c3f5af56181a3caaae036",
+    "license": "Apache-2.0",
+    "url": "https://github.com/AdobeDocs/uxp-photoshop-plugin-samples/tree/d937f1a/invisible-plugin-sample"
+   }
+  },
+  {
+   "id": "ui-kitchen-sink",
+   "title": "Spectrum UI kitchen sink",
+   "description": "Every Spectrum UXP widget on one panel: buttons, fields, pickers, sliders, menus, radios and more.",
+   "category": "UI",
+   "tags": [
+    "Spectrum",
+    "sp-*",
+    "widgets"
+   ],
+   "file": "ui-kitchen-sink.json",
+   "origin": {
+    "repo": "AdobeDocs/uxp-photoshop-plugin-samples",
+    "path": "ui-kitchen-sink",
+    "commit": "d937f1a36f3a2149a92c3f5af56181a3caaae036",
+    "license": "MIT",
+    "url": "https://github.com/AdobeDocs/uxp-photoshop-plugin-samples/tree/d937f1a/ui-kitchen-sink"
+   }
+  },
+  {
+   "id": "secure-storage",
+   "title": "Secure storage",
+   "description": "Stores and reads a value with the secureStorage API.",
+   "category": "Storage",
+   "tags": [
+    "secureStorage",
+    "uxp.storage"
+   ],
+   "file": "secure-storage.json",
+   "origin": {
+    "repo": "AdobeDocs/uxp-photoshop-plugin-samples",
+    "path": "secure-storage-sample",
+    "commit": "d937f1a36f3a2149a92c3f5af56181a3caaae036",
+    "license": "Apache-2.0",
+    "url": "https://github.com/AdobeDocs/uxp-photoshop-plugin-samples/tree/d937f1a/secure-storage-sample"
+   }
+  },
+  {
+   "id": "web-service-call",
+   "title": "Web service call",
+   "description": "Fetches a weather forecast from weather.gov and writes it to a text layer.",
+   "category": "Network",
+   "tags": [
+    "fetch",
+    "network permission",
+    "text layer"
+   ],
+   "file": "web-service-call.json",
+   "origin": {
+    "repo": "AdobeDocs/uxp-photoshop-plugin-samples",
+    "path": "web-service-call-js-sample",
+    "commit": "d937f1a36f3a2149a92c3f5af56181a3caaae036",
+    "license": "Apache-2.0",
+    "url": "https://github.com/AdobeDocs/uxp-photoshop-plugin-samples/tree/d937f1a/web-service-call-js-sample"
+   }
+  },
+  {
+   "id": "ui-react-starter",
+   "title": "React starter",
+   "description": "Two panels and a dialog command written in React. Runs from source here; the original builds with webpack.",
+   "category": "Frameworks",
+   "tags": [
+    "React",
+    "JSX",
+    "panels + command"
+   ],
+   "file": "ui-react-starter.json",
+   "origin": {
+    "repo": "AdobeDocs/uxp-photoshop-plugin-samples",
+    "path": "ui-react-starter",
+    "commit": "d937f1a36f3a2149a92c3f5af56181a3caaae036",
+    "license": "MIT",
+    "url": "https://github.com/AdobeDocs/uxp-photoshop-plugin-samples/tree/d937f1a/ui-react-starter"
+   }
+  },
+  {
+   "id": "typescript-webpack",
+   "title": "TypeScript starter",
+   "description": "TypeScript with the @types/photoshop definitions. Runs from source here; the original builds with webpack.",
+   "category": "Frameworks",
+   "tags": [
+    "TypeScript",
+    "@types/photoshop"
+   ],
+   "file": "typescript-webpack.json",
+   "origin": {
+    "repo": "AdobeDocs/uxp-photoshop-plugin-samples",
+    "path": "typescript-webpack-sample",
+    "commit": "d937f1a36f3a2149a92c3f5af56181a3caaae036",
+    "license": "MIT",
+    "url": "https://github.com/AdobeDocs/uxp-photoshop-plugin-samples/tree/d937f1a/typescript-webpack-sample"
+   }
+  }
+ ]
+}

@@ -37,6 +37,15 @@ function kindOf(file: string): 'js' | 'css' | 'html' | 'manifest' | null {
   return null;
 }
 
+/** Rule documentation: the provider's meta.docs.url, or eslint.org for core rules. */
+function docsFor(provider: UxpLintProvider, ruleId: string | null): string | undefined {
+  if (!ruleId) return undefined;
+  const fromProvider = provider.docsUrl?.(ruleId);
+  if (fromProvider) return fromProvider;
+  if (ruleId in BASE_RULES) return `https://eslint.org/docs/latest/rules/${ruleId}`;
+  return undefined;
+}
+
 export function lintProject(req: LintRequest, provider: UxpLintProvider = defaultProvider): LintResponse {
   const t0 = performance.now();
   const diagnostics: Diagnostic[] = [];
@@ -87,7 +96,8 @@ export function lintProject(req: LintRequest, provider: UxpLintProvider = defaul
           severity: severityFromEslint(m.severity),
           ruleId: m.ruleId || (m.fatal ? 'parse-error' : 'eslint'),
           message: m.message,
-          source: kind === 'css' ? 'css' : kind === 'manifest' ? 'manifest' : 'eslint'
+          source: kind === 'css' ? 'css' : kind === 'manifest' ? 'manifest' : 'eslint',
+          docsUrl: docsFor(provider, m.ruleId)
         });
       }
     } catch (e: any) {

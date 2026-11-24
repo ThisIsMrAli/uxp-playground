@@ -263,6 +263,7 @@ export interface Template {
   id: string;
   label: string;
   description: string;
+  tags?: string[];
   build: () => Project;
 }
 
@@ -276,11 +277,12 @@ const project = (name: string, files: Record<string, string>, active = 'index.js
   active
 });
 
-export const TEMPLATES: Template[] = [
+const BASE_TEMPLATES: Template[] = [
   {
     id: 'hello',
     label: 'Hello panel',
     description: 'Spectrum widgets, entrypoints.setup, a command and app.showAlert.',
+    tags: ['basics', 'Spectrum', 'entrypoints'],
     build: () =>
       project('Hello panel', {
         'manifest.json': manifest({ id: 'pg.hello.panel', name: 'Hello Panel', panelId: 'helloPanel', label: 'Hello', commands: [{ id: 'sayHello', label: 'Say hello' }] }),
@@ -293,6 +295,7 @@ export const TEMPLATES: Template[] = [
     id: 'batchplay-rename',
     label: 'batchPlay: rename layer',
     description: 'batchPlay get/set inside core.executeAsModal, plus the error you get outside a modal scope.',
+    tags: ['batchPlay', 'executeAsModal'],
     build: () =>
       project('batchPlay rename', {
         'manifest.json': manifest({ id: 'pg.batchplay.rename', name: 'Rename Layer', panelId: 'renamePanel', label: 'Rename Layer' }),
@@ -305,6 +308,7 @@ export const TEMPLATES: Template[] = [
     id: 'react',
     label: 'React panel',
     description: 'React 19 + JSX across two files. Export compiles JSX and ships React in vendor/.',
+    tags: ['React', 'JSX', 'multi-file'],
     build: () =>
       project(
         'React panel',
@@ -322,6 +326,7 @@ export const TEMPLATES: Template[] = [
     id: 'file-picker',
     label: 'File picker',
     description: 'localFileSystem.getFileForOpening / getFileForSaving with the manifest v5 permission.',
+    tags: ['file system', 'permissions'],
     build: () =>
       project('File picker', {
         'manifest.json': manifest({ id: 'pg.file.picker', name: 'File Picker', panelId: 'filePanel', label: 'File Picker', perms: { localFileSystem: 'request' } }),
@@ -331,6 +336,372 @@ export const TEMPLATES: Template[] = [
       })
   }
 ];
+
+
+// ---------------------------------------------------------------- templates from real-plugin patterns
+const domHtml = `<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <sp-heading size="XS">Layers in the active document</sp-heading>
+    <ul id="layers"></ul>
+    <div class="row">
+      <sp-action-button id="group">Group selected</sp-action-button>
+      <sp-action-button id="dup">Duplicate</sp-action-button>
+      <sp-action-button id="hideText">Hide text layers</sp-action-button>
+    </div>
+    <sp-body id="status" size="XS"></sp-body>
+    <script src="index.js"></script>
+  </body>
+</html>
+`;
+const domJs = `// Photoshop DOM API (app.activeDocument, layers, bounds) with every change inside executeAsModal.
+const { app, core, constants } = require("photoshop");
+
+const list = document.getElementById("layers");
+const status = (msg) => (document.getElementById("status").textContent = msg);
+
+function render() {
+  const doc = app.activeDocument;
+  list.innerHTML = "";
+  if (!doc) return status("Open a document first.");
+  const walk = (layers, depth) => {
+    for (const layer of layers) {
+      const li = document.createElement("li");
+      const b = layer.bounds;
+      li.style.paddingLeft = depth * 12 + "px";
+      li.textContent = \`\${layer.kind === constants.LayerKind.GROUP ? "▸ " : ""}\${layer.name} — \${layer.kind}, \${b.width}×\${b.height}\${layer.visible ? "" : " (hidden)"}\`;
+      if (layer.selected) li.className = "selected";
+      list.appendChild(li);
+      if (layer.layers) walk(layer.layers, depth + 1);
+    }
+  };
+  walk(doc.layers, 0);
+  status(\`\${doc.title}: \${doc.width}×\${doc.height} px, \${doc.activeLayers.length} selected\`);
+}
+
+async function modal(commandName, fn) {
+  try {
+    await core.executeAsModal(fn, { commandName });
+  } catch (e) {
+    status("Error: " + e.message);
+  }
+  render();
+}
+
+document.getElementById("group").addEventListener("click", () =>
+  modal("Group selected layers", async () => {
+    const doc = app.activeDocument;
+    await doc.createLayerGroup({ name: "Group", fromLayers: doc.activeLayers });
+  })
+);
+document.getElementById("dup").addEventListener("click", () =>
+  modal("Duplicate layer", async () => {
+    for (const layer of app.activeDocument.activeLayers) await layer.duplicate();
+  })
+);
+document.getElementById("hideText").addEventListener("click", () =>
+  modal("Hide text layers", async () => {
+    const hide = (layers) => {
+      for (const l of layers) {
+        if (l.kind === constants.LayerKind.TEXT) l.visible = false;
+        if (l.layers) hide(l.layers);
+      }
+    };
+    hide(app.activeDocument.layers);
+  })
+);
+
+render();
+`;
+const domCss = baseCss + `ul#layers {
+  list-style: none;
+  margin: 4px 0;
+  padding: 6px;
+  border: 1px solid var(--uxp-host-border-color);
+  border-radius: 4px;
+  max-height: 200px;
+  overflow: auto;
+  font-size: 11px;
+}
+ul#layers li.selected {
+  color: var(--uxp-host-link-text-color);
+}
+`;
+
+const notifyHtml = `<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <sp-heading size="XS">Photoshop events</sp-heading>
+    <sp-body size="XS">Listening for make, select, set and delete. Trigger some events:</sp-body>
+    <div class="row">
+      <sp-action-button id="make">New layer</sp-action-button>
+      <sp-action-button id="select">Select bottom layer</sp-action-button>
+      <sp-action-button id="stop">Stop listening</sp-action-button>
+    </div>
+    <ol id="feed"></ol>
+    <script src="index.js"></script>
+  </body>
+</html>
+`;
+const notifyJs = `// action.addNotificationListener: react to what happens in Photoshop.
+const { action, core } = require("photoshop");
+
+const EVENTS = ["make", "select", "set", "delete"];
+const feed = document.getElementById("feed");
+
+function onEvent(event, descriptor) {
+  const li = document.createElement("li");
+  li.textContent = \`\${new Date().toLocaleTimeString()} \${event} \${JSON.stringify(descriptor).slice(0, 80)}\`;
+  feed.prepend(li);
+}
+
+action.addNotificationListener(EVENTS, onEvent);
+
+document.getElementById("make").addEventListener("click", () =>
+  core.executeAsModal(
+    () => action.batchPlay([{ _obj: "make", _target: [{ _ref: "layer" }], using: { _obj: "layer", name: "From event demo" } }], {}),
+    { commandName: "Make layer" }
+  )
+);
+document.getElementById("select").addEventListener("click", () =>
+  core.executeAsModal(
+    () => action.batchPlay([{ _obj: "select", _target: [{ _ref: "layer", _index: 1 }], makeVisible: false }], {}),
+    { commandName: "Select layer" }
+  )
+);
+document.getElementById("stop").addEventListener("click", async () => {
+  await action.removeNotificationListener(EVENTS, onEvent);
+  onEvent("(stopped listening)", {});
+});
+`;
+
+const imagingHtml = `<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <sp-heading size="XS">Imaging API thumbnail</sp-heading>
+    <sp-button id="grab" variant="cta">Get thumbnail</sp-button>
+    <div class="thumb"><img id="img" alt="Document thumbnail" /></div>
+    <sp-body id="info" size="XS"></sp-body>
+    <script src="index.js"></script>
+  </body>
+</html>
+`;
+const imagingJs = `// imaging.getPixels -> encodeImageData -> <img>. Always dispose image data you no longer need.
+const { app, core, imaging } = require("photoshop");
+
+document.getElementById("grab").addEventListener("click", async () => {
+  const info = document.getElementById("info");
+  try {
+    await core.executeAsModal(
+      async () => {
+        const doc = app.activeDocument;
+        const pixels = await imaging.getPixels({ documentID: doc.id, targetSize: { height: 120 } });
+        const jpeg = await imaging.encodeImageData({ imageData: pixels.imageData, base64: true });
+        document.getElementById("img").src = "data:image/jpeg;base64," + jpeg;
+        info.textContent = \`\${pixels.imageData.width}×\${pixels.imageData.height}, \${pixels.imageData.components} components\`;
+        pixels.imageData.dispose();
+      },
+      { commandName: "Get thumbnail" }
+    );
+  } catch (e) {
+    info.textContent = "Error: " + e.message;
+  }
+});
+`;
+const imagingCss = baseCss + `.thumb {
+  margin: 8px 0;
+  min-height: 120px;
+  border: 1px dashed var(--uxp-host-border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+`;
+
+const settingsHtml = `<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <sp-heading size="XS">Settings in the plugin data folder</sp-heading>
+    <sp-textfield id="prefix" placeholder="Prefix"><sp-label slot="label">Layer name prefix</sp-label></sp-textfield>
+    <sp-checkbox id="upper">Uppercase</sp-checkbox>
+    <div class="row">
+      <sp-button id="save" variant="cta">Save</sp-button>
+      <sp-button id="load" variant="secondary">Reload</sp-button>
+    </div>
+    <sp-body id="status" size="XS"></sp-body>
+    <script src="index.js"></script>
+  </body>
+</html>
+`;
+const settingsJs = `// Persist settings as JSON in the plugin data folder (no permission needed), with a localStorage counter.
+const { storage } = require("uxp");
+const fs = storage.localFileSystem;
+
+const FILE = "settings.json";
+const $ = (id) => document.getElementById(id);
+
+async function load() {
+  try {
+    const folder = await fs.getDataFolder();
+    const file = await folder.getEntry(FILE);
+    const settings = JSON.parse(await file.read());
+    $("prefix").value = settings.prefix || "";
+    $("upper").checked = !!settings.upper;
+    $("status").textContent = "Loaded " + FILE;
+  } catch (e) {
+    $("status").textContent = "No saved settings yet.";
+  }
+}
+
+async function save() {
+  const folder = await fs.getDataFolder();
+  const file = await folder.createFile(FILE, { overwrite: true });
+  await file.write(JSON.stringify({ prefix: $("prefix").value, upper: $("upper").checked }, null, 2));
+  const saves = Number(localStorage.getItem("saves") || 0) + 1;
+  localStorage.setItem("saves", String(saves));
+  $("status").textContent = \`Saved (\${saves} saves this session)\`;
+}
+
+$("save").addEventListener("click", save);
+$("load").addEventListener("click", load);
+load();
+`;
+
+const menusHtml = `<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <sp-heading size="XS">Flyout menu and commands</sp-heading>
+    <sp-body size="XS">Open the panel menu (☰ in the panel header) or run the command from the preview toolbar.</sp-body>
+    <sp-body id="last" size="S">Nothing invoked yet.</sp-body>
+    <script src="index.js"></script>
+  </body>
+</html>
+`;
+const menusJs = `// entrypoints.setup with panel menuItems, invokeMenu, and a menu command entrypoint.
+const { entrypoints } = require("uxp");
+const { app } = require("photoshop");
+
+const show = (text) => (document.getElementById("last").textContent = text);
+let compact = false;
+
+entrypoints.setup({
+  plugin: {
+    create() {
+      console.log("plugin created");
+    }
+  },
+  panels: {
+    menuPanel: {
+      show() {
+        show("Panel shown");
+      },
+      menuItems: [
+        { id: "refresh", label: "Refresh" },
+        { id: "compact", label: "Compact mode", checked: false },
+        { id: "-", label: "-" },
+        { id: "about", label: "About…" }
+      ],
+      invokeMenu(id) {
+        if (id === "compact") compact = !compact;
+        show("Menu: " + id + (id === "compact" ? " (" + compact + ")" : ""));
+      }
+    }
+  },
+  commands: {
+    resetPanel: {
+      run() {
+        show("Command resetPanel ran");
+        return app.showAlert("Panel reset");
+      }
+    }
+  }
+});
+`;
+
+export const EXTRA_TEMPLATES: Template[] = [
+  {
+    id: 'dom-layers',
+    label: 'DOM: layers and groups',
+    description: 'app.activeDocument, nested layers, bounds, createLayerGroup and duplicate inside executeAsModal.',
+    tags: ['DOM', 'layers', 'executeAsModal'],
+    build: () =>
+      project('DOM layers', {
+        'manifest.json': manifest({ id: 'pg.dom.layers', name: 'DOM Layers', panelId: 'domPanel', label: 'DOM Layers', height: 360 }),
+        'index.html': domHtml,
+        'index.js': domJs,
+        'styles.css': domCss
+      })
+  },
+  {
+    id: 'notifications',
+    label: 'Event listener',
+    description: 'action.addNotificationListener with a live event feed, and removeNotificationListener.',
+    tags: ['events', 'batchPlay'],
+    build: () =>
+      project('Event listener', {
+        'manifest.json': manifest({ id: 'pg.notify', name: 'Event Listener', panelId: 'notifyPanel', label: 'Events' }),
+        'index.html': notifyHtml,
+        'index.js': notifyJs,
+        'styles.css': baseCss
+      })
+  },
+  {
+    id: 'imaging',
+    label: 'Imaging API thumbnail',
+    description: 'imaging.getPixels with targetSize, encodeImageData to an <img>, and dispose().',
+    tags: ['imaging', 'executeAsModal'],
+    build: () =>
+      project('Imaging thumbnail', {
+        'manifest.json': manifest({ id: 'pg.imaging', name: 'Imaging Thumbnail', panelId: 'imagingPanel', label: 'Thumbnail', minVersion: '24.2.0' }),
+        'index.html': imagingHtml,
+        'index.js': imagingJs,
+        'styles.css': imagingCss
+      })
+  },
+  {
+    id: 'settings',
+    label: 'Settings in the data folder',
+    description: 'getDataFolder, createFile({ overwrite }), File.read/write as JSON, plus localStorage.',
+    tags: ['storage', 'file system'],
+    build: () =>
+      project('Settings storage', {
+        'manifest.json': manifest({ id: 'pg.settings', name: 'Settings Storage', panelId: 'settingsPanel', label: 'Settings' }),
+        'index.html': settingsHtml,
+        'index.js': settingsJs,
+        'styles.css': baseCss
+      })
+  },
+  {
+    id: 'menus',
+    label: 'Flyout menu and commands',
+    description: 'Panel menuItems with invokeMenu, plugin.create and a command entrypoint.',
+    tags: ['entrypoints', 'menus', 'commands'],
+    build: () =>
+      project('Menus and commands', {
+        'manifest.json': manifest({ id: 'pg.menus', name: 'Menus and Commands', panelId: 'menuPanel', label: 'Menus', commands: [{ id: 'resetPanel', label: 'Reset panel' }] }),
+        'index.html': menusHtml,
+        'index.js': menusJs,
+        'styles.css': baseCss
+      })
+  }
+];
+
+export const TEMPLATES: Template[] = [...BASE_TEMPLATES, ...EXTRA_TEMPLATES];
 
 export function templateById(id: string): Template {
   return TEMPLATES.find((t) => t.id === id) ?? TEMPLATES[0];

@@ -7,7 +7,7 @@
   "author": "ThisIsMrAli",
   "type": "module",
   "scripts": {
-    "vendor": "node scripts/build-vendor.mjs",
+    "vendor": "node scripts/build-vendor.mjs && node scripts/build-ps-api.mjs && node scripts/build-monaco-entry.mjs",
     "dev": "npm run vendor && vite",
     "build": "npm run vendor && tsc --noEmit && vite build",
     "preview": "vite preview",

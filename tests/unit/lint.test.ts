@@ -6,7 +6,8 @@ import { provider as fallback } from '../../src/lint/fallbackProvider';
 import type { UxpLintProvider } from '../../src/lint/adapter';
 import { TEMPLATES, templateById } from '../../src/core/templates';
 
-const externalBuilt = existsSync(resolve(process.env.UXP_ESLINT_DIR || '../uxp-eslint', 'dist/browser.js'));
+const eslintDir = process.env.UXP_ESLINT_DIR || '../uxp-eslint';
+const externalBuilt = ['dist/uxp-lint.browser.mjs', 'dist/browser.js'].some((f) => existsSync(resolve(eslintDir, f)));
 const providers: [string, () => Promise<UxpLintProvider>][] = [['fallback', async () => fallback]];
 if (externalBuilt) providers.push(['eslint-plugin-uxp-lint', async () => (await import('../../src/lint/externalProvider')).provider]);
 
@@ -58,6 +59,23 @@ for (const [label, load] of providers) {
       expect(d.length, JSON.stringify(d)).toBeGreaterThanOrEqual(1);
       expect(d[0].line).toBe(2);
     });
+    it('links each diagnostic to its rule documentation', async () => {
+      const p = templateById('batchplay-rename').build();
+      const d = await lint({ ...p.files, 'extra.js': 'undefinedThing();' });
+      const modal = d.find((x) => x.ruleId === modalRule)!;
+      const core = d.find((x) => x.ruleId === 'no-undef')!;
+      expect(core.docsUrl).toBe('https://eslint.org/docs/latest/rules/no-undef');
+      if (label === 'fallback') expect(modal.docsUrl ?? null).toBeNull();
+      else expect(modal.docsUrl).toBe('https://github.com/ThisIsMrAli/uxp-eslint/blob/main/docs/rules/photoshop-modal-scope.md');
+    });
+    if (label !== 'fallback') {
+      it('passes the selected UXP version to the rules (settings.uxp.uxpVersion)', async () => {
+        const files = { ...templateById('hello').build().files, 'x.js': 'const b = new ImageBlob(new ArrayBuffer(4), { type: "image/png" });\nconsole.log(b);' };
+        const hit = (d: Awaited<ReturnType<typeof lint>>) => d.some((x) => x.file === 'x.js' && x.ruleId === 'uxp-lint/api-min-version');
+        expect(hit(await lint(files, '6.0'))).toBe(true);
+        expect(hit(await lint(files, '9.2'))).toBe(false);
+      });
+    }
     it('keeps the playground manifest checks', async () => {
       const files = { ...templateById('hello').build().files, 'manifest.json': '{ "id": ' };
       expect((await lint(files)).some((x) => x.ruleId === 'manifest/json')).toBe(true);

@@ -10,7 +10,8 @@ const assets = {
   runtime: readFileSync(resolve('src/runtime/runtime.js'), 'utf8'),
   panelCss: readFileSync(resolve('src/runtime/panel.css'), 'utf8'),
   shimCss: readFileSync(resolve('src/runtime/shim.css'), 'utf8'),
-  vendor: readFileSync(resolve('src/generated/react-bundle.js'), 'utf8')
+  vendor: readFileSync(resolve('src/generated/react-bundle.js'), 'utf8'),
+  psApi: JSON.parse(readFileSync(resolve('src/generated/ps-api.json'), 'utf8'))
 };
 
 function boot(p: Project) {
@@ -111,7 +112,7 @@ describe('preview runtime (jsdom)', () => {
     const { win } = boot(p);
     expect(win.result.sum).toBe(5);
     expect(win.result.name).toBe('cfg');
-    expect(win.result.err).toMatch(/need a bundler/);
+    expect(win.result.err).toMatch(/need the project bundler/);
   });
 
   it('renders the React template with the vendored React', async () => {
@@ -119,7 +120,7 @@ describe('preview runtime (jsdom)', () => {
     await tick(50);
     const text = win.document.getElementById('root').textContent;
     expect(text).toContain('React panel');
-    expect(text).toContain('Layers (3)');
+    expect(text).toContain('Layers (4)');
   });
 
   it('approximates sp-* widgets with working values and events', async () => {

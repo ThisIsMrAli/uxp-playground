@@ -23,6 +23,11 @@ export interface LogEntry {
   kind: 'console' | 'error' | 'host-call' | 'file-written' | 'system';
   level?: string;
   text: string;
-  detail?: unknown;
+  detail?: any;
   time: number;
+  /** Project file the entry points at (compile and load errors). */
+  file?: string;
+  line?: number;
+  /** Repeated identical consecutive messages are collapsed into one entry. */
+  count?: number;
 }
