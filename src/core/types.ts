@@ -1,0 +1,28 @@
+export type HostApp = 'PS' | 'ID' | 'premierepro';
+export type Theme = 'darkest' | 'dark' | 'medium' | 'light' | 'lightest';
+
+export interface Target {
+  app: HostApp;
+  /** UXP version the user wants to approximate, e.g. "9.2". Drives lint and runtime labels only. */
+  uxp: string;
+}
+
+export interface Project {
+  /** Format version of the saved/shared state. */
+  v: 1;
+  name: string;
+  target: Target;
+  theme: Theme;
+  /** Preview size in CSS px; null = use the manifest's preferredDockedSize. */
+  size: { width: number; height: number } | null;
+  files: Record<string, string>;
+  active: string;
+}
+
+export interface LogEntry {
+  kind: 'console' | 'error' | 'host-call' | 'file-written' | 'system';
+  level?: string;
+  text: string;
+  detail?: unknown;
+  time: number;
+}

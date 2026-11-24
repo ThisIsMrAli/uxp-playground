@@ -1,0 +1,42 @@
+/* Approximate UXP panel surface for the browser preview. Colours and metrics are approximations, not Adobe's values. */
+:root {
+  --pg-bg: #323232; --pg-fg: #d4d4d4; --pg-fg-strong: #f0f0f0; --pg-muted: #a0a0a0; --pg-border: #4a4a4a;
+  --pg-field: #1e1e1e; --pg-field-border: #5a5a5a; --pg-hover: #3e3e3e; --pg-accent: #378ef0; --pg-accent-fg: #fff;
+  --pg-cta: #1473e6; --pg-negative: #e34850; --pg-track: #5a5a5a;
+  /* Host-provided variables (some hosts provide these; Premiere does not, per Adobe's CSS styling guide). */
+  --uxp-host-background-color: var(--pg-bg);
+  --uxp-host-text-color: var(--pg-fg);
+  --uxp-host-border-color: var(--pg-border);
+  --uxp-host-link-text-color: var(--pg-accent);
+  --uxp-host-font-size: 12px;
+  color-scheme: dark;
+}
+:root[data-theme="darkest"] { --pg-bg: #1e1e1e; --pg-fg: #c8c8c8; --pg-fg-strong: #ececec; --pg-border: #393939; --pg-field: #121212; --pg-field-border: #4a4a4a; --pg-hover: #2c2c2c; }
+:root[data-theme="medium"] { --pg-bg: #535353; --pg-fg: #e6e6e6; --pg-fg-strong: #fff; --pg-border: #6a6a6a; --pg-field: #3a3a3a; --pg-field-border: #747474; --pg-hover: #5e5e5e; --pg-track: #7a7a7a; }
+:root[data-theme="light"] { --pg-bg: #b8b8b8; --pg-fg: #1f1f1f; --pg-fg-strong: #000; --pg-muted: #444; --pg-border: #9a9a9a; --pg-field: #e9e9e9; --pg-field-border: #8a8a8a; --pg-hover: #c6c6c6; --pg-track: #8a8a8a; color-scheme: light; }
+:root[data-theme="lightest"] { --pg-bg: #f0f0f0; --pg-fg: #2c2c2c; --pg-fg-strong: #000; --pg-muted: #555; --pg-border: #d0d0d0; --pg-field: #fff; --pg-field-border: #b0b0b0; --pg-hover: #e2e2e2; --pg-track: #c0c0c0; color-scheme: light; }
+html, body { margin: 0; padding: 0; background: var(--uxp-host-background-color); color: var(--uxp-host-text-color);
+  font-family: "Adobe Clean", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: var(--uxp-host-font-size); }
+body { padding: 8px; box-sizing: border-box; min-height: 100vh; }
+sp-heading { display: block; font-weight: 700; color: var(--pg-fg-strong); font-size: 18px; margin: 4px 0 8px; }
+sp-heading[size="XXS"] { font-size: 12px; } sp-heading[size="XS"] { font-size: 14px; } sp-heading[size="S"] { font-size: 16px; }
+sp-heading[size="L"] { font-size: 22px; } sp-heading[size="XL"] { font-size: 26px; }
+sp-body { display: block; font-size: 13px; line-height: 1.5; margin: 4px 0; }
+sp-body[size="XS"] { font-size: 11px; } sp-body[size="S"] { font-size: 12px; } sp-body[size="L"] { font-size: 15px; }
+sp-detail { display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--pg-muted); margin: 4px 0; }
+sp-label { display: block; font-size: 11px; color: var(--pg-muted); margin: 6px 0 3px; }
+sp-divider { display: block; height: 2px; background: var(--pg-border); margin: 8px 0; border-radius: 1px; }
+sp-divider[size="small"] { height: 1px; } sp-divider[size="large"] { height: 4px; }
+sp-link { color: var(--uxp-host-link-text-color); text-decoration: underline; cursor: pointer; }
+sp-icon { display: inline-block; width: 18px; height: 18px; vertical-align: middle; }
+sp-button, sp-action-button { display: inline-block; margin: 2px 4px 2px 0; vertical-align: middle; }
+sp-textfield, sp-textarea, sp-picker, sp-dropdown, sp-slider, sp-progressbar { display: block; margin: 4px 0; }
+sp-checkbox, sp-switch, sp-radio { display: inline-block; margin: 2px 12px 2px 0; cursor: default; }
+sp-radio-group { display: block; }
+sp-radio-group[column] sp-radio { display: block; }
+sp-menu, sp-menu-item { display: block; }
+.pg-host-alert { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 2147483647; }
+.pg-host-alert-box { background: #2b2b2b; color: #eee; border: 1px solid #555; border-radius: 6px; padding: 14px 16px; min-width: 180px; max-width: 80%; font: 13px system-ui, sans-serif; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.pg-host-alert-title { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #aaa; margin-bottom: 6px; }
+.pg-host-alert-msg { margin-bottom: 12px; white-space: pre-wrap; word-break: break-word; }
+.pg-host-alert-box button { background: #1473e6; color: #fff; border: 0; border-radius: 14px; padding: 5px 16px; font-weight: 700; cursor: pointer; }
