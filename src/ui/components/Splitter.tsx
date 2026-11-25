@@ -25,7 +25,7 @@ export function Splitter({ axis, value, min, max, onChange, invert, label, testI
         const d = (axis === 'x' ? e.clientX : e.clientY) - start.current.pos;
         onChange(clamp(start.current.value + (invert ? -d : d)));
       }}
-      onPointerUp={() => {
+      onLostPointerCapture={() => {
         start.current = null;
         document.body.classList.remove('resizing', 'resizing-x', 'resizing-y');
       }}

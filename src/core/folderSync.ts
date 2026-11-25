@@ -18,6 +18,10 @@ export function folderPicker(): DirectoryPicker | undefined {
 interface SyncRecord {
   folder: SyncFolder;
   hashes: Record<string, string[]>;
+  /** A previous write did not finish; missing files can be part of that partial write. */
+  pending?: boolean;
+  /** Paths that might legitimately be missing during that write. */
+  pendingMissing?: string[];
 }
 const harmlessFiles = new Set(['.DS_Store', '.localized', 'desktop.ini', 'Thumbs.db']);
 
@@ -140,6 +144,11 @@ export async function syncPluginFolder(folder: SyncFolder, project: Project, ven
     const current = new Map(await Promise.all(allPaths.map(async (path) =>
       [path, await getCurrentFile(folder, path)] as const)));
     for (const [path, entry] of current) {
+      const missingDuringInterruptedWrite = existing?.record.pending &&
+        (!existing.record.pendingMissing || existing.record.pendingMissing.includes(path));
+      if (!entry && Object.hasOwn(previous, path) && !missingDuringInterruptedWrite) {
+        throw new Error(`${path} was deleted outside the playground. Restore it or sync to a different folder.`);
+      }
       if (entry && !Object.hasOwn(previous, path)) {
         throw new Error(`${path} already exists. Move it or sync to an empty folder.`);
       }
@@ -157,7 +166,8 @@ export async function syncPluginFolder(folder: SyncFolder, project: Project, ven
     const pending = Object.fromEntries(entries.map(({ path, hash }) => [
       path, [...new Set([current.get(path)?.hash || emptyFileHash, hash])]
     ]));
-    const record: SyncRecord = { folder, hashes: { ...previous, ...pending } };
+    const pendingMissing = allPaths.filter((path) => !current.get(path) || !Object.hasOwn(files, path));
+    const record: SyncRecord = { folder, hashes: { ...previous, ...pending }, pending: true, pendingMissing };
     signal.throwIfAborted();
     const key = await withRecords('readwrite', (store) => existing ? store.put(record, existing.id) : store.add(record));
     // Write dependencies before the manifest and leave unchanged files alone to avoid redundant reloads.

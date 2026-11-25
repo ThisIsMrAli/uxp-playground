@@ -16,7 +16,7 @@ The built site bundles the following packages. Licenses as published on the npm 
 | fflate | 0.8.3 | MIT | Plugin .zip export |
 | @types/photoshop | 27.11.0 | MIT (DefinitelyTyped) | Editor autocomplete for `photoshop` |
 | @adobe/cc-ext-uxp-types | 7.3.1 | Apache-2.0 (LICENSE file and file headers; the package.json has no `license` field) | Editor autocomplete for `uxp` |
-| eslint-plugin-uxp-lint | 0.2.0 (sibling repo) | MIT | UXP lint rules, when present at build time |
+| eslint-plugin-uxp-lint | 0.2.0, source commit 138aa45 | MIT | Pinned browser bundle for UXP lint rules; see `vendor/uxp-lint/` for its license and data notices |
 
 ## Example plugins
 

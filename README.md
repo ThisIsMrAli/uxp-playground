@@ -9,7 +9,7 @@ A browser playground for Adobe UXP plugins. Edit a plugin's files, see an **appr
 ## Features
 
 - **Multi-file editor** (Monaco) for `manifest.json`, HTML, JS/JSX/TS, CSS, and additional files. Autocomplete and hovers use Photoshop, Premiere Pro, and UXP type declarations. The editor checks manifest v5, warns when a documented Premiere API needs a later host version, and flags async callbacks in Premiere operations that run synchronously. [Adobe’s Premiere Pro API reference](https://developer.adobe.com/premiere-pro/uxp/ppro-reference/)
-- **Target selectors** for Photoshop, Premiere Pro, InDesign, Media Encoder, and After Effects Beta, plus UXP version, theme, and panel size.
+- **Target selectors** for Photoshop, Premiere Pro, InDesign, Media Encoder (UXP public beta), and After Effects Beta, plus UXP version, theme, and panel size. Media Encoder 27.0 or later can be either its stable or beta release. [Adobe's Media Encoder setup](https://developer.adobe.com/media-encoder/uxp/get-started/developer-tools/)
 - **Live preview** in a sandboxed iframe (`allow-scripts allow-modals allow-forms`, no same-origin), framed like a host panel and labelled *Approximate*:
   - CommonJS `require` for the supported hosts' API modules, `uxp`, React, relative files, and JSON.
   - JSX, TypeScript and ES modules are compiled with sucrase.
@@ -20,8 +20,8 @@ A browser playground for Adobe UXP plugins. Edit a plugin's files, see an **appr
   - `uxp.storage.localFileSystem` (the real browser file picker for opening; saving and the data folder are kept in memory), `secureStorage`, `entrypoints.setup` and `getPanel`/`getCommand` (panel create/show, flyout menus, commands you can run from the sidebar, headless plugins), `shell.openExternal` and `userInfo`.
   - Manifest v5 permission checks (manifest v4 plugins are not checked, as in UXP) for the file system, `launchProcess`, network domains (wildcards supported) and `enableUserInfo`.
 - **Problems panel**:
-  - ESLint 10 runs in a Web Worker with `eslint-plugin-uxp-lint` (JS, CSS, HTML and manifest rules) when that sibling repo is built.
-  - Otherwise built-in fallback rules run.
+  - ESLint 10 runs in a Web Worker with a pinned `eslint-plugin-uxp-lint` bundle (JS, CSS, HTML and manifest rules), including on GitHub Pages.
+  - Built-in fallback rules can also be selected for development.
   - Playground checks for the manifest are always on.
   - Results also show as editor squiggles.
 - **Examples gallery** with host and task filters, a starter for each supported app, and shared file picker and settings examples for manifest v5 hosts. The gallery also includes Adobe's licensed Photoshop samples in `public/examples/`. Every sample can be opened from a link such as `#template=premiere-sequence` or `#template=file-picker&host=ID`.
@@ -58,7 +58,7 @@ The page exposes `window.uxpPlayground` (`importFiles`, `getProject`, `setProjec
 
 ### UXP lint rules
 
-`vite.config.ts` bundles `eslint-plugin-uxp-lint` from `../uxp-eslint/dist/uxp-lint.browser.mjs` (or the older `dist/browser.js`) when it exists. The selected UXP version is passed as `settings.uxp.uxpVersion`, and each problem links to its rule page (`meta.docs.url`; core ESLint rules link to eslint.org). Point to another checkout with `UXP_ESLINT_DIR=/path/to/uxp-eslint`, or force the built-in rules with `UXP_LINT_PROVIDER=fallback`. Build the plugin first (`npm run build` in that repo).
+The pinned browser bundle in `vendor/uxp-lint` makes local and deployed lint results consistent. The selected UXP version is passed as `settings.uxp.uxpVersion`, and each problem links to its rule page (`meta.docs.url`; core ESLint rules link to eslint.org). To develop against another built checkout, set `UXP_ESLINT_DIR=/path/to/uxp-eslint`; set `UXP_LINT_PROVIDER=fallback` to use the built-in rules.
 
 ## Load an exported plugin in UDT
 
@@ -83,6 +83,7 @@ GitHub Actions builds and deploys the static `dist/` directory to GitHub Pages o
 
 - **Layout and CSS** come from Chromium, not UXP's engine. UXP lacks CSS Grid and some properties (the linter flags many of these), and fonts and metrics differ.
 - **Spectrum UXP widgets** are approximations. Adobe documents the real ones as native widgets, not web components.
+- Adobe recommends [Spectrum Web Components](https://developer.adobe.com/uxp/guides/explanation/fundamentals/user-interfaces/) for new production interfaces. Those are separately imported packages; the playground's widget approximations do not provide or bundle them. Build projects that use them with their normal toolchain and verify them in the host.
 - **The JavaScript engine** is your browser's, so newer built-ins may work here but not in UXP. The UXP selector only changes the ECMAScript level used by the linter.
 - **Host APIs** are hand-written mocks with one sample document:
   - Most batchPlay events return `{}` and log "not simulated".

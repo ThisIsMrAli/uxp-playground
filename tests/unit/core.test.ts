@@ -113,6 +113,8 @@ describe('versions', () => {
   it('maps Photoshop versions to UXP using the changelog table', () => {
     expect(uxpForPhotoshop('24.4.0')).toBe('7.0');
     expect(uxpForPhotoshop('26.1')).toBe('8.1');
+    expect(uxpForPhotoshop('27.7')).toBe('9.3');
+    expect(uxpForPhotoshop('27.11')).toBe('9.4.1');
     expect(uxpForPhotoshop('23.0')).toBeNull();
     expect(cmpVersion('26.10', '26.9')).toBe(1);
     expect(ecmaVersionFor('7.4')).toBe(2022);

@@ -3,7 +3,7 @@ import { Preview, postToPreview, type EntrypointInfo } from './Preview';
 import { buildTemplate, templateById, templateHash, TEMPLATES } from '../core/templates';
 import { PREMIERE_SCENARIOS, type PreviewScenario } from '../core/scenarios';
 import { buildPreview, type RuntimeAssets, type PreviewBuild } from '../core/buildPreview';
-import { buildPluginZip, readZip } from '../core/exportZip';
+import { ArchiveLimitError, buildPluginZip, MAX_ARCHIVE_BYTES, readZip } from '../core/exportZip';
 import { panelSize, parseManifest, primaryHost, type Diagnostic } from '../core/manifest';
 import { readHash, sanitizeProject, share, validFileName, type Reproduction } from '../core/share';
 import { loadGist } from '../core/gist';
@@ -271,11 +271,13 @@ export function App() {
 
   const openZipFile = useCallback(
     async (file: File, root?: string) => {
+      if (file.size > MAX_ARCHIVE_BYTES) throw new Error('Archive exceeds the 50 MB import limit.');
       const bytes = new Uint8Array(await file.arrayBuffer());
       let raw: RawFiles;
       try {
         raw = readZip(bytes);
-      } catch {
+      } catch (e) {
+        if (e instanceof ArchiveLimitError) throw e;
         throw new Error(`${file.name} is not a valid zip or .ccx archive.`);
       }
       importRaw(raw, file.name.replace(/\.(zip|ccx)$/i, ''), root, (c) => {
@@ -434,9 +436,12 @@ export function App() {
   // Autosave (localStorage, IndexedDB for big projects). Embeds never write the reader's storage.
   useEffect(() => {
     if (EMBED) return;
+    let current = true;
     setSaveState('saving');
-    const t = window.setTimeout(() => saveProject(project).then((r) => setSaveState(r === 'failed' ? 'failed' : 'saved')), 600);
-    return () => window.clearTimeout(t);
+    const t = window.setTimeout(() => saveProject(project).then((r) => {
+      if (current) setSaveState(r === 'failed' ? 'failed' : 'saved');
+    }), 600);
+    return () => { current = false; window.clearTimeout(t); };
   }, [project]);
 
   // ---------------------------------------------------------------- edits
@@ -1307,7 +1312,7 @@ function About({ host }: { host: { app?: string; minVersion?: string } }) {
       <p>
         Use the Adobe app to check native layout, fonts, real documents, and permission prompts. The Host calls tab identifies APIs the preview could not simulate.
       </p>
-      <p className="muted small">Photoshop → UXP versions from Adobe's changelog: {PS_UXP_TABLE.map((r) => `PS ${r.ps} → UXP ${r.uxp}`).join(' · ')}.</p>
+      <p className="muted small">Photoshop → UXP versions from Adobe's changelog and version table: {PS_UXP_TABLE.map((r) => `PS ${r.ps} → UXP ${r.uxp}`).join(' · ')}.</p>
     </div>
   );
 }

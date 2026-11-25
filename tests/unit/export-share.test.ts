@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { strFromU8 } from 'fflate';
-import { buildPluginZip, exportFiles, readZip, validatePluginFiles } from '../../src/core/exportZip';
+import { strFromU8, zipSync } from 'fflate';
+import { buildPluginZip, exportFiles, MAX_ARCHIVE_BYTES, MAX_ARCHIVE_EXPANDED_BYTES, MAX_ARCHIVE_ENTRIES, readZip, validatePluginFiles } from '../../src/core/exportZip';
 import { readHash, share, SHARE_URL_WARN, decodeProject } from '../../src/core/share';
 import { templateById, TEMPLATES } from '../../src/core/templates';
 import { batchPlayCode, describeDescriptor } from '../../src/core/batchplay';
@@ -16,6 +16,23 @@ const manifest = (extra: Record<string, unknown> = {}) =>
   JSON.stringify({ manifestVersion: 5, id: 'x', name: 'X', version: '1.2.3', main: 'index.html', host: { app: 'PS', minVersion: '24.0.0' }, entrypoints: [{ type: 'panel', id: 'p', icons: [{ path: 'icons/dark.png', scale: [1, 2] }] }], ...extra });
 
 describe('plugin zip export', () => {
+  it('rejects oversized archives and expansion before allocating the declared output', () => {
+    expect(() => readZip(new Uint8Array(MAX_ARCHIVE_BYTES + 1))).toThrow(/50 MB/);
+    const archive = zipSync({ 'large.js': new Uint8Array([1]) });
+    const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+    let central = 0;
+    while (central < archive.length - 4 && view.getUint32(central, true) !== 0x02014b50) central++;
+    expect(central).toBeLessThan(archive.length - 4);
+    view.setUint32(central + 24, MAX_ARCHIVE_EXPANDED_BYTES + 1, true);
+    expect(() => readZip(archive)).toThrow(/64 MB/);
+  });
+
+  it('limits the number of archive entries', () => {
+    const files: Record<string, Uint8Array> = {};
+    for (let i = 0; i <= MAX_ARCHIVE_ENTRIES; i++) files[`${i}.js`] = new Uint8Array();
+    expect(() => readZip(zipSync(files))).toThrow(/5000 entries/);
+  });
+
   it('produces a folder UDT accepts: binaries decoded, dev files dropped, CSS/image imports turned into modules', () => {
     const p = project({
       'manifest.json': manifest(),

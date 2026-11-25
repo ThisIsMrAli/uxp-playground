@@ -2,6 +2,7 @@
 import { Linter } from 'eslint-linter-browserify';
 import globals from 'globals';
 import { checkCss, checkManifest, parseManifest, type Diagnostic } from '../core/manifest';
+import { hostInfo } from '../core/hosts';
 import { ecmaVersionFor } from '../core/versions';
 import { severityFromEslint, type LintRequest, type LintResponse } from './adapter';
 import { provider as defaultProvider } from './provider';
@@ -27,7 +28,7 @@ const BASE_RULES: Record<string, 'warn' | 'error' | 'off'> = {
 };
 
 /** Rule ids from the playground's own manifest checks that the external plugin does not cover. */
-const PLAYGROUND_ONLY = new Set(['manifest/json', 'manifest/main-missing', 'manifest/host-mismatch', 'manifest/min-version-gap']);
+const PLAYGROUND_ONLY = new Set(['manifest/json', 'manifest/main-missing', 'manifest/host-mismatch', 'manifest/host-app-value', 'manifest/min-version-gap']);
 
 function kindOf(file: string): 'js' | 'css' | 'html' | 'manifest' | null {
   if (file === 'manifest.json') return 'manifest';
@@ -87,6 +88,11 @@ export function lintProject(req: LintRequest, provider: UxpLintProvider = defaul
     try {
       const messages = linter.verify(code, config, { filename: file });
       for (const m of messages) {
+        // Older external plugin builds predate newer hosts. Keep all other manifest
+        // diagnostics, but do not report a known playground host as unknown.
+        const unknownHost = kind === 'manifest' && m.ruleId === 'uxp-lint/valid-manifest'
+          ? /^Unknown host app `([^`]+)`/.exec(m.message)?.[1] : undefined;
+        if (unknownHost && hostInfo(unknownHost)) continue;
         diagnostics.push({
           file,
           line: m.line || 1,

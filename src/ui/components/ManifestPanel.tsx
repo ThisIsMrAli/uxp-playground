@@ -88,7 +88,7 @@ export function ManifestPanel({ text, onChange, onOpenManifest }: { text: string
             id <input value={m.id ?? ''} onChange={(e) => set(['id'], e.target.value)} />
           </label>
           <label>
-            name <input value={typeof m.name === 'string' ? m.name : m.name?.default ?? ''} onChange={(e) => set(['name'], e.target.value)} />
+            name <input value={typeof m.name === 'string' ? m.name : m.name?.default ?? ''} onChange={(e) => set(['name'], typeof m.name === 'object' && m.name && !Array.isArray(m.name) ? { ...m.name, default: e.target.value } : e.target.value)} />
           </label>
           <label>
             version <input value={m.version ?? ''} onChange={(e) => set(['version'], e.target.value)} />

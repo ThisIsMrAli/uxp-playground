@@ -1,6 +1,6 @@
 /**
- * UXP versions named in Adobe's Photoshop UXP changelog
- * (https://developer.adobe.com/photoshop/uxp/2022/ps-reference/changelog/, snapshot retrieved 2026-11-09).
+ * UXP versions named in Adobe's Photoshop UXP changelog and version table
+ * (https://developer.adobe.com/uxp/uxp-api/versions, checked 2026-11-25).
  * The Photoshop version is the release whose changelog entry first mentions that UXP version.
  */
 export const PS_UXP_TABLE: { ps: string; uxp: string; released: string }[] = [
@@ -16,11 +16,13 @@ export const PS_UXP_TABLE: { ps: string; uxp: string; released: string }[] = [
   { ps: '26.8', uxp: '8.3', released: 'June 2025' },
   { ps: '26.9', uxp: '8.4', released: 'July 2025' },
   { ps: '26.10', uxp: '9.0', released: 'August 2025' },
-  { ps: '27.4', uxp: '9.2', released: 'February 2026' }
+  { ps: '27.4', uxp: '9.2', released: 'February 2026' },
+  { ps: '27.7', uxp: '9.3', released: '' },
+  { ps: '27.11', uxp: '9.4.1', released: '' }
 ];
 
 /** UXP versions offered in the selector. */
-export const UXP_VERSIONS = ['6.0', '6.4', '6.5', '7.0', '7.1', '7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '9.0', '9.1', '9.2', '9.4'];
+export const UXP_VERSIONS = ['6.0', '6.4', '6.5', '7.0', '7.1', '7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '9.0', '9.1', '9.2', '9.3', '9.4', '9.4.1'];
 
 export function cmpVersion(a: string, b: string): number {
   const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);

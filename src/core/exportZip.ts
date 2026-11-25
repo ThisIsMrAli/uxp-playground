@@ -188,10 +188,29 @@ export function buildPluginZip(p: Project, vendorBundle: string | null): ExportR
   return { zip, fileName, files: Object.keys(files).sort(), warnings, problems };
 }
 
+/** Limits apply before decompression, so a small compressed archive cannot exhaust the tab's memory. */
+export const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024;
+export const MAX_ARCHIVE_EXPANDED_BYTES = 64 * 1024 * 1024;
+export const MAX_ARCHIVE_ENTRIES = 5000;
+
+export class ArchiveLimitError extends Error {}
+
 /** Reads a zip (or .ccx) into raw files for the importer. */
 export function readZip(bytes: Uint8Array): Record<string, Uint8Array> {
+  if (bytes.length > MAX_ARCHIVE_BYTES) throw new ArchiveLimitError('Archive exceeds the 50 MB import limit.');
   const out: Record<string, Uint8Array> = {};
-  const all = unzipSync(bytes);
+  let expanded = 0;
+  let entries = 0;
+  const all = unzipSync(bytes, { filter: (file) => {
+    if (++entries > MAX_ARCHIVE_ENTRIES) throw new ArchiveLimitError(`Archive contains more than ${MAX_ARCHIVE_ENTRIES} entries.`);
+    // Stored entries are copied according to compressed size; account for both
+    // sizes even if the ZIP metadata is inconsistent.
+    expanded += Math.max(file.originalSize, file.compression === 0 ? file.size : 0);
+    if (!Number.isSafeInteger(expanded) || expanded > MAX_ARCHIVE_EXPANDED_BYTES) {
+      throw new ArchiveLimitError('Archive expands beyond the 64 MB limit.');
+    }
+    return !file.name.endsWith('/');
+  } });
   for (const [k, v] of Object.entries(all)) if (!k.endsWith('/')) out[k] = v;
   return out;
 }

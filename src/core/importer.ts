@@ -3,8 +3,8 @@
  * Handles real-world layouts: a wrapping top-level folder, the plugin in a sub-folder (plugin/, dist/),
  * several manifests (monorepos), binary assets, and webpack/Vite projects whose panel script is a build output.
  */
-import { decodeText, fileSize, isBinaryContent, isTextPath, toDataUrl } from './files';
-import { MAX_FILES, sanitizeProject, validFileName } from './share';
+import { decodeText, fileSize, isBinaryContent, isTextPath, resolveRelative, toDataUrl } from './files';
+import { MAX_FILE_CHARS, MAX_FILES, sanitizeProject, validFileName } from './share';
 import type { Project } from './types';
 import { HOSTS } from './hosts';
 import { SCRIPT_RE } from './compile';
@@ -167,6 +167,9 @@ export function importTree(raw: RawFiles, opts: ImportOptions = {}): ImportResul
         content = toDataUrl(from, v);
       }
     }
+    // sanitizeProject caps file length for shared state. Do not silently import
+    // a truncated source file, which would make a working plugin fail to run.
+    if (content.length > MAX_FILE_CHARS) return skipped.push({ path: from, reason: `file exceeds ${MAX_FILE_CHARS.toLocaleString()} character limit` });
     const size = fileSize(content);
     if (total + size > maxTotal) return skipped.push({ path: from, reason: 'project size limit reached' });
     total += size;
@@ -220,7 +223,11 @@ export function importTree(raw: RawFiles, opts: ImportOptions = {}): ImportResul
   // Panel HTML that loads a script which only exists after a build (index.js from webpack).
   let entryStub: ImportReport['entryStub'];
   const mainHtml = typeof manifest.main === 'string' && /\.html?$/i.test(manifest.main) ? manifest.main : files['index.html'] != null ? 'index.html' : null;
-  const missingScripts = mainHtml && files[mainHtml] != null ? scriptRefs(files[mainHtml]).filter((s) => !/^https?:/i.test(s) && files[s.replace(/^\.\//, '')] == null) : [];
+  // Script URLs are relative to the HTML file, not the project root. Resolving
+  // them here also removes query strings and excludes remote/data URLs.
+  const missingScripts = mainHtml && files[mainHtml] != null
+    ? scriptRefs(files[mainHtml]).map((s) => resolveRelative(mainHtml, s)).filter((s): s is string => s != null && files[s] == null)
+    : [];
   const mainScriptMissing = typeof manifest.main === 'string' && SCRIPT_RE.test(manifest.main) && files[manifest.main] == null;
   const mainHtmlMissing = typeof manifest.main === 'string' && /\.html?$/i.test(manifest.main) && files[manifest.main] == null;
   if (mainHtmlMissing) {
@@ -240,7 +247,7 @@ export function importTree(raw: RawFiles, opts: ImportOptions = {}): ImportResul
   }
   if (!entryStub && (missingScripts.length || mainScriptMissing)) {
     const entry = findSourceEntry(files);
-    const target = mainScriptMissing ? manifest.main : missingScripts[0]?.replace(/^\.\//, '');
+    const target = mainScriptMissing ? manifest.main : missingScripts[0];
     if (entry && target && SCRIPT_RE.test(target)) {
       const rel = (target.split('/').length > 1 ? '../'.repeat(target.split('/').length - 1) : './') + entry;
       files[target] = `${STUB_MARKER}\n// This project is normally built with a bundler, which writes ${target}.\n// UXP Playground added this file so the panel runs the source entry (${entry}) directly.\n// npm packages other than react/react-dom cannot be loaded without the bundler.\nrequire(${JSON.stringify(rel)});\n`;

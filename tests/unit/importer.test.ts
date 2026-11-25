@@ -70,6 +70,27 @@ describe('importTree', () => {
     expect(r.project.files['dist/index.html']).not.toContain('bundle.js');
   });
 
+  it('resolves script references relative to a nested panel before creating stubs', () => {
+    const source = 'console.log("real panel")';
+    const existing = importTree({
+      'manifest.json': manifest({ main: 'panel/index.html' }),
+      'panel/index.html': '<script src="./index.js?v=1"></script>',
+      'panel/index.js': source,
+      'src/index.js': 'console.log("source entry")'
+    });
+    expect(existing.report.entryStub).toBeUndefined();
+    expect(existing.project.files['panel/index.js']).toBe(source);
+    expect(existing.project.files['index.js']).toBeUndefined();
+
+    const missing = importTree({
+      'manifest.json': manifest({ main: 'panel/index.html' }),
+      'panel/index.html': '<script src="./index.js"></script>',
+      'src/index.js': 'console.log("source entry")'
+    });
+    expect(missing.report.entryStub).toEqual({ file: 'panel/index.js', entry: 'src/index.js' });
+    expect(missing.project.files['panel/index.js']).toContain('require("../src/index.js")');
+  });
+
   it('reports a clear error when there is no UXP manifest', () => {
     expect(() => importTree({ 'index.js': 'x' })).toThrow(/No UXP manifest\.json/);
   });
@@ -79,6 +100,12 @@ describe('importTree', () => {
     const r = importTree({ 'manifest.json': manifest(), 'index.html': 'x', 'huge.psd': big });
     expect(r.project.files['huge.psd']).toBeUndefined();
     expect(r.report.skipped[0].reason).toMatch(/binary file over/);
+  });
+
+  it('reports oversized source files instead of silently truncating them', () => {
+    const r = importTree({ 'manifest.json': manifest(), 'index.html': 'x', 'large.js': 'a'.repeat(6_000_001) });
+    expect(r.project.files['large.js']).toBeUndefined();
+    expect(r.report.skipped).toContainEqual({ path: 'large.js', reason: expect.stringContaining('character limit') });
   });
 });
 

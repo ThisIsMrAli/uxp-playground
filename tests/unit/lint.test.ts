@@ -6,8 +6,10 @@ import { provider as fallback } from '../../src/lint/fallbackProvider';
 import type { UxpLintProvider } from '../../src/lint/adapter';
 import { TEMPLATES, templateById } from '../../src/core/templates';
 
-const eslintDir = process.env.UXP_ESLINT_DIR || '../uxp-eslint';
-const externalBuilt = ['dist/uxp-lint.browser.mjs', 'dist/browser.js'].some((f) => existsSync(resolve(eslintDir, f)));
+const eslintDir = process.env.UXP_ESLINT_DIR;
+const externalBuilt = eslintDir
+  ? ['dist/uxp-lint.browser.mjs', 'dist/browser.js'].some((f) => existsSync(resolve(eslintDir, f)))
+  : existsSync(resolve('vendor/uxp-lint/uxp-lint.browser.mjs'));
 const providers: [string, () => Promise<UxpLintProvider>][] = [['fallback', async () => fallback]];
 if (externalBuilt) providers.push(['eslint-plugin-uxp-lint', async () => (await import('../../src/lint/externalProvider')).provider]);
 
@@ -79,6 +81,13 @@ for (const [label, load] of providers) {
     it('keeps the playground manifest checks', async () => {
       const files = { ...templateById('hello').build().files, 'manifest.json': '{ "id": ' };
       expect((await lint(files)).some((x) => x.ruleId === 'manifest/json')).toBe(true);
+    });
+    it('warns about unsupported hosts even with the external provider', async () => {
+      const files = { ...templateById('hello').build().files };
+      const manifest = JSON.parse(files['manifest.json']);
+      manifest.host.app = 'XD';
+      files['manifest.json'] = JSON.stringify(manifest);
+      expect((await lint(files)).some((x) => x.ruleId === 'manifest/host-app-value')).toBe(true);
     });
   });
 }

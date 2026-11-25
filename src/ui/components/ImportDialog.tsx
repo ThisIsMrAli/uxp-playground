@@ -55,7 +55,7 @@ export function ImportDialog({ onClose, onGithub, onZip, onFolder, onGist, onJso
           <form onSubmit={(e) => { e.preventDefault(); run(() => onGithub(gh)); }}>
             <p>Open any public UXP plugin repository. The playground finds manifest.json (also in sub-folders and monorepos) and downloads only that plugin.</p>
             <div className="row">
-              <input autoFocus className="grow" value={gh} onChange={(e) => setGh(e.target.value)} placeholder="AdobeDocs/uxp-photoshop-plugin-samples/hello-world-panel-js-sample" aria-label="GitHub repository" data-testid="github-input" />
+              <input data-initial-focus className="grow" value={gh} onChange={(e) => setGh(e.target.value)} placeholder="AdobeDocs/uxp-photoshop-plugin-samples/hello-world-panel-js-sample" aria-label="GitHub repository" data-testid="github-input" />
               <button className="btn primary" disabled={busy || !gh.trim()} data-testid="github-import">
                 {busy ? 'Importing…' : 'Import'}
               </button>

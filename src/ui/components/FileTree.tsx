@@ -96,8 +96,8 @@ export function FileTree({
       if (n.children) {
         const isClosed = closed[n.path];
         return [
-          <li key={'d:' + n.path} role="treeitem" aria-expanded={!isClosed} aria-level={depth + 1}>
-            <button className="tree-row folder" style={pad} onClick={() => setClosed((c) => ({ ...c, [n.path]: !isClosed }))} data-testid={`folder-${n.path}`}>
+          <li key={'d:' + n.path}>
+            <button className="tree-row folder" style={pad} aria-expanded={!isClosed} aria-label={`Folder ${n.path}`} onClick={() => setClosed((c) => ({ ...c, [n.path]: !isClosed }))} data-testid={`folder-${n.path}`}>
               <Icon name={isClosed ? 'chevronRight' : 'chevronDown'} size={12} className="chev" />
               <Icon name={isClosed ? 'folder' : 'folderOpen'} size={14} />
               <span className="tree-name">{n.name}</span>
@@ -117,10 +117,12 @@ export function FileTree({
         ];
       }
       return [
-        <li key={n.path} role="treeitem" aria-selected={isActive} aria-level={depth + 1} className={isActive ? 'active' : ''}>
+        <li key={n.path} className={isActive ? 'active' : ''}>
           <button
             className="tree-row file"
             style={pad}
+            aria-label={n.path}
+            aria-current={isActive ? 'true' : undefined}
             onClick={() => onOpen(n.path)}
             onDoubleClick={() => !readOnly && n.path !== 'manifest.json' && setEditing({ mode: 'rename', path: n.path, value: n.path })}
             onKeyDown={(e) => {
@@ -168,7 +170,7 @@ export function FileTree({
           <input autoFocus aria-label="New file name" placeholder="utils.js or lib/helpers.js" value={editing.value} onChange={(e) => setEditing({ ...editing, value: e.target.value })} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(null); }} data-testid="new-file-name" />
         </div>
       )}
-      <ul className="tree" role="tree" aria-label="Project files">
+      <ul className="tree" aria-label="Project files">
         {render(tree, 0)}
       </ul>
     </div>

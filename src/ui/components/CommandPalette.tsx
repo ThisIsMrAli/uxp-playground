@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
+import { useModalFocus } from './useModalFocus';
 
 export interface PaletteCommand {
   id: string;
@@ -32,6 +33,8 @@ export function CommandPalette({ commands, onClose, initial = '', placeholder }:
   const [q, setQ] = useState(initial);
   const [sel, setSel] = useState(0);
   const list = useRef<HTMLUListElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const trapFocus = useModalFocus(box);
   const items = useMemo(
     () =>
       commands
@@ -53,12 +56,13 @@ export function CommandPalette({ commands, onClose, initial = '', placeholder }:
   };
   return (
     <div className="dialog-backdrop palette-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="palette" role="dialog" aria-modal="true" aria-label="Command palette" data-testid="palette">
+      <div ref={box} tabIndex={-1} className="palette" role="dialog" aria-modal="true" aria-label="Command palette" data-testid="palette" onKeyDown={trapFocus}>
         <div className="palette-input">
           <Icon name="search" />
           <input
-            autoFocus
+            data-initial-focus
             role="combobox"
+            aria-label="Search commands"
             aria-expanded="true"
             aria-controls="palette-list"
             aria-activedescendant={items[sel] ? 'pc-' + items[sel].id : undefined}
@@ -66,7 +70,7 @@ export function CommandPalette({ commands, onClose, initial = '', placeholder }:
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') { setSel((s) => Math.min(items.length - 1, s + 1)); e.preventDefault(); }
+              if (e.key === 'ArrowDown') { setSel((s) => Math.max(0, Math.min(items.length - 1, s + 1))); e.preventDefault(); }
               else if (e.key === 'ArrowUp') { setSel((s) => Math.max(0, s - 1)); e.preventDefault(); }
               else if (e.key === 'Enter') { pick(items[sel]); e.preventDefault(); }
               else if (e.key === 'Escape') { onClose(); e.preventDefault(); }
