@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { Icon } from './Icon';
 import { Gallery, type ExampleMeta } from './Gallery';
+import { type HostApp } from '../../core/hosts';
+import { TEMPLATES } from '../../core/templates';
 
-export function Welcome({ onClose, onOpenExample, onOpenTemplate, onImport, onGithub, onCopyLink }: { onClose: () => void; onOpenExample: (m: ExampleMeta) => void; onOpenTemplate: (id: string) => void; onImport: () => void; onGithub: (spec: string) => void; onCopyLink: (hash: string) => void }) {
+export function Welcome({ onClose, onOpenExample, onOpenTemplate, onImport, onGithub, onCopyLink, target }: { onClose: () => void; onOpenExample: (m: ExampleMeta) => void; onOpenTemplate: (id: string, app?: HostApp) => void; onImport: () => void; onGithub: (spec: string) => void; onCopyLink: (hash: string) => void; target: HostApp }) {
   const [gh, setGh] = useState('');
+  const starter = TEMPLATES.find((t) => t.host === target) ?? TEMPLATES[0];
   return (
     <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="welcome" role="dialog" aria-modal="true" aria-labelledby="welcome-title" data-testid="welcome" onKeyDown={(e) => e.key === 'Escape' && onClose()}>
@@ -18,10 +21,10 @@ export function Welcome({ onClose, onOpenExample, onOpenTemplate, onImport, onGi
           </div>
         </div>
         <div className="welcome-actions">
-          <button className="welcome-card" onClick={() => onOpenTemplate('hello')} autoFocus data-testid="welcome-start">
+          <button className="welcome-card" onClick={() => onOpenTemplate(starter.id)} autoFocus data-testid="welcome-start">
             <Icon name="sparkle" size={20} />
             <strong>Start a panel</strong>
-            <span>A small Spectrum panel with a command, ready to edit.</span>
+            <span>{starter.label}</span>
           </button>
           <form className="welcome-card" onSubmit={(e) => { e.preventDefault(); if (gh.trim()) onGithub(gh.trim()); }}>
             <Icon name="github" size={20} />
@@ -35,9 +38,9 @@ export function Welcome({ onClose, onOpenExample, onOpenTemplate, onImport, onGi
           </button>
         </div>
         <h2 className="welcome-sub">Examples</h2>
-        <Gallery compact onOpenExample={onOpenExample} onOpenTemplate={onOpenTemplate} onCopyLink={onCopyLink} />
+        <Gallery compact target={target} onOpenExample={onOpenExample} onOpenTemplate={onOpenTemplate} onCopyLink={onCopyLink} />
         <p className="welcome-note">
-          <Icon name="info" size={13} /> The preview approximates UXP in your browser with mocked Photoshop APIs. It is for learning, prototyping and sharing; always confirm in the real host with UXP Developer Tool.
+          <Icon name="info" size={13} /> The browser preview uses sample data. Use Run in host to test a plugin in its Adobe app.
         </p>
       </div>
     </div>

@@ -63,6 +63,12 @@ describe('plugin zip export', () => {
   it('exports every built-in template without problems', () => {
     for (const t of TEMPLATES) expect(buildPluginZip(t.build(), 'vendor').problems, t.id).toEqual([]);
   });
+  it('exports localized manifest names and reports non-object manifests', () => {
+    const p = project({ 'manifest.json': manifest({ name: { default: 'Localized Plugin' } }), 'index.html': '' });
+    expect(buildPluginZip(p, null).fileName).toBe('localized-plugin-1.2.3.zip');
+    expect(validatePluginFiles({ 'manifest.json': 'null' })).toEqual(['manifest.json must contain a JSON object']);
+    expect(readHash('#github=broken%')).toBeNull();
+  });
 });
 
 describe('share links', () => {

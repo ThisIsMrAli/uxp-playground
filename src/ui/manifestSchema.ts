@@ -1,10 +1,12 @@
-/** Partial JSON schema for UXP manifest v5, written from Adobe's manifest docs. Used for editor hints only. */
+import { HOSTS } from '../core/hosts';
+
+/** Partial UXP manifest schema, written from Adobe's manifest docs. Used for editor hints only. */
 const size = { type: 'object', properties: { width: { type: 'number' }, height: { type: 'number' } }, required: ['width', 'height'] };
 const label = { oneOf: [{ type: 'string' }, { type: 'object', properties: { default: { type: 'string' } }, required: ['default'] }] };
 const host = {
   type: 'object',
   properties: {
-    app: { enum: ['PS', 'ID', 'premierepro', 'ame'], description: 'Host application' },
+    app: { enum: HOSTS.map(({ id }) => id), description: 'Host application' },
     minVersion: { type: 'string', pattern: '^\\d+(\\.\\d+){0,2}$' },
     maxVersion: { type: 'string' },
     data: { type: 'object' }

@@ -1,5 +1,6 @@
 import { cmpVersion, uxpForPhotoshop } from './versions';
 import type { Target } from './types';
+import { hostInfo, HOSTS } from './hosts';
 
 export interface Diagnostic {
   file: string;
@@ -26,7 +27,11 @@ export interface ParsedManifest {
 export function parseManifest(text: string | undefined): ParsedManifest {
   if (text == null) return { ok: false, value: {}, error: 'manifest.json is missing' };
   try {
-    return { ok: true, value: JSON.parse(text) };
+    const value = JSON.parse(text);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return { ok: false, value: {}, error: 'manifest.json must contain a JSON object' };
+    }
+    return { ok: true, value };
   } catch (e: any) {
     const msg = String(e && e.message ? e.message : e);
     let line = 1;
@@ -50,7 +55,7 @@ export function parseManifest(text: string | undefined): ParsedManifest {
 /** The host entry for `app` (or the first one). Manifest v4 allows an array of hosts. */
 export function primaryHost(m: any, app?: string): { app?: string; minVersion?: string; data?: any } {
   const h = m && m.host;
-  if (Array.isArray(h)) return (app && h.find((x: any) => x && x.app === app)) || h.find((x: any) => x && ['PS', 'ID', 'premierepro'].includes(x.app)) || h[0] || {};
+  if (Array.isArray(h)) return (app && h.find((x: any) => x && x.app === app)) || h.find((x: any) => hostInfo(x?.app)) || h[0] || {};
   return h || {};
 }
 
@@ -92,6 +97,7 @@ export function checkManifest(text: string | undefined, files: Record<string, st
     return out;
   }
   const m = parsed.value;
+  const host = primaryHost(m, target.app);
   if (m.manifestVersion !== 5) add('manifestVersion', 'warning', 'manifest/version', 'Use "manifestVersion": 5 for the v5 permissions model (PS 23.3+/UXP 6.0+).');
   for (const k of ['id', 'name', 'version', 'main', 'host']) {
     if (m[k] == null || m[k] === '') add(k, 'error', 'manifest/required', `Missing required field "${k}".`);
@@ -99,10 +105,9 @@ export function checkManifest(text: string | undefined, files: Record<string, st
   if (m.entrypoints == null) add('id', 'info', 'manifest/no-entrypoints', 'No "entrypoints": this is an invisible plugin (no panel or menu command). Add a panel or command entrypoint to give it UI.');
   if (m.version != null && !/^\d+(\.\d+){0,2}$/.test(String(m.version))) add('version', 'error', 'manifest/semver', 'version must look like x.y.z.');
   if (typeof m.main === 'string' && files[m.main.replace(/^\.\//, '')] == null) add('main', 'error', 'manifest/main-missing', `"main" points to "${m.main}", which is not a file in this project.`);
-  const host = primaryHost(m, target.app);
   if (m.host) {
     if (!host.app) add('host', 'error', 'manifest/host-app', 'host.app is required (e.g. "PS").');
-    else if (!['PS', 'ID', 'premierepro', 'ame'].includes(host.app)) add('app', 'warning', 'manifest/host-app-value', `host.app "${host.app}" is not one of the documented values "PS", "ID", "premierepro", "ame".`);
+    else if (!hostInfo(host.app)) add('app', 'warning', 'manifest/host-app-value', `host.app "${host.app}" is not a supported playground host. Use one of ${HOSTS.map(({ id }) => id).join(', ')}.`);
     else if (host.app !== target.app) add('app', 'warning', 'manifest/host-mismatch', `host.app is "${host.app}" but the playground target is ${target.app}.`);
     if (!host.minVersion) add('host', 'warning', 'manifest/min-version', 'host.minVersion is recommended.');
   }

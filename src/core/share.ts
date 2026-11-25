@@ -1,10 +1,10 @@
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import type { Project } from './types';
 import { UXP_VERSIONS } from './versions';
+import { hostInfo, type HostApp } from './hosts';
 import { fileSize, isBinaryContent } from './files';
 
 const THEMES = ['darkest', 'dark', 'medium', 'light', 'lightest'];
-const APPS = ['PS', 'ID', 'premierepro'];
 /** Real plugins (Adobe's samples, GitHub plugins) have dozens to hundreds of files. */
 export const MAX_FILES = 600;
 /** Per-file cap in characters; binary files are stored as base64 data URLs. */
@@ -52,7 +52,7 @@ export function sanitizeProject(raw: any): Project | null {
   return {
     v: 1,
     name: typeof (raw.name ?? raw.n) === 'string' ? String(raw.name ?? raw.n).slice(0, 120) : 'Shared playground',
-    target: { app: APPS.includes(t.app) ? t.app : 'PS', uxp: UXP_VERSIONS.includes(t.uxp) ? t.uxp : '9.2' },
+    target: { app: hostInfo(t.app)?.id ?? 'PS', uxp: UXP_VERSIONS.includes(t.uxp) ? t.uxp : '9.2' },
     theme: THEMES.includes(theme) ? theme : 'dark',
     size: size && Number(size.width) > 0 && Number(size.height) > 0 ? { width: Math.min(2000, Number(size.width)), height: Math.min(2000, Number(size.height)) } : null,
     files: clean,
@@ -103,7 +103,7 @@ export type HashRoute =
   | { kind: 'gist'; id: string; file?: string }
   | { kind: 'github'; spec: string }
   | { kind: 'example'; id: string }
-  | { kind: 'template'; id: string };
+  | { kind: 'template'; id: string; host?: HostApp };
 
 export function readHash(hash: string): HashRoute | null {
   const h = hash.replace(/^#/, '');
@@ -113,16 +113,22 @@ export function readHash(hash: string): HashRoute | null {
     return id ? { kind: 'gist', id } : null;
   }
   if (h.startsWith('github=')) {
-    const spec = decodeURIComponent(h.slice(7)).trim();
-    return spec ? { kind: 'github', spec } : null;
+    try {
+      const spec = decodeURIComponent(h.slice(7)).trim();
+      return spec ? { kind: 'github', spec } : null;
+    } catch {
+      return null;
+    }
   }
   if (h.startsWith('example=')) {
     const id = h.slice(8).replace(/[^A-Za-z0-9_-]/g, '');
     return id ? { kind: 'example', id } : null;
   }
   if (h.startsWith('template=')) {
-    const id = h.slice(9).replace(/[^A-Za-z0-9_-]/g, '');
-    return id ? { kind: 'template', id } : null;
+    const params = new URLSearchParams(h);
+    const id = params.get('template')?.replace(/[^A-Za-z0-9_-]/g, '');
+    const host = hostInfo(params.get('host'))?.id;
+    return id ? { kind: 'template', id, ...(host && { host }) } : null;
   }
   return null;
 }

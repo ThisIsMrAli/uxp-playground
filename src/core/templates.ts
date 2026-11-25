@@ -1,13 +1,15 @@
 import type { Project } from './types';
+import { hostInfo, type HostApp } from './hosts';
 
-function manifest(opts: { id: string; name: string; panelId: string; label: string; main?: string; minVersion?: string; perms?: Record<string, unknown>; width?: number; height?: number; commands?: { id: string; label: string }[] }): string {
+function manifest(opts: { id: string; name: string; panelId: string; label: string; main?: string; minVersion?: string; app?: HostApp; perms?: Record<string, unknown>; width?: number; height?: number; commands?: { id: string; label: string }[] }): string {
+  const host = hostInfo(opts.app ?? 'PS')!;
   const m = {
     manifestVersion: 5,
     id: opts.id,
     name: opts.name,
     version: '1.0.0',
     main: opts.main ?? 'index.html',
-    host: { app: 'PS', minVersion: opts.minVersion ?? '24.4.0' },
+    host: { app: host.id, minVersion: opts.minVersion ?? host.minVersion, ...(host.id === 'PS' && { data: { apiVersion: 2 } }) },
     entrypoints: [
       {
         type: 'panel',
@@ -18,9 +20,9 @@ function manifest(opts: { id: string; name: string; panelId: string; label: stri
         preferredDockedSize: { width: opts.width ?? 300, height: opts.height ?? 420 },
         preferredFloatingSize: { width: opts.width ?? 300, height: opts.height ?? 420 }
       },
-      ...(opts.commands ?? []).map((c) => ({ type: 'command', id: c.id, label: { default: c.label } }))
+      ...(opts.commands ?? []).map((c) => ({ type: 'command', id: c.id, label: c.label }))
     ],
-    requiredPermissions: opts.perms ?? {}
+    ...(opts.perms && { requiredPermissions: opts.perms })
   };
   return JSON.stringify(m, null, 2) + '\n';
 }
@@ -264,13 +266,14 @@ export interface Template {
   label: string;
   description: string;
   tags?: string[];
-  build: () => Project;
+  host?: HostApp | 'shared';
+  build: (app?: HostApp) => Project;
 }
 
-const project = (name: string, files: Record<string, string>, active = 'index.js'): Project => ({
+const project = (name: string, files: Record<string, string>, active = 'index.js', app: HostApp = 'PS'): Project => ({
   v: 1,
   name,
-  target: { app: 'PS', uxp: '9.2' },
+  target: { app, uxp: hostInfo(app)!.uxp },
   theme: 'dark',
   size: null,
   files,
@@ -327,13 +330,14 @@ const BASE_TEMPLATES: Template[] = [
     label: 'File picker',
     description: 'localFileSystem.getFileForOpening / getFileForSaving with the manifest v5 permission.',
     tags: ['file system', 'permissions'],
-    build: () =>
+    host: 'shared',
+    build: (app = 'PS') =>
       project('File picker', {
-        'manifest.json': manifest({ id: 'pg.file.picker', name: 'File Picker', panelId: 'filePanel', label: 'File Picker', perms: { localFileSystem: 'request' } }),
+        'manifest.json': manifest({ id: 'pg.file.picker', name: 'File Picker', panelId: 'filePanel', label: 'File Picker', app, perms: { localFileSystem: 'request' } }),
         'index.html': pickerHtml,
         'index.js': pickerJs,
         'styles.css': baseCss
-      })
+      }, 'index.js', app)
   }
 ];
 
@@ -678,13 +682,14 @@ export const EXTRA_TEMPLATES: Template[] = [
     label: 'Settings in the data folder',
     description: 'getDataFolder, createFile({ overwrite }), File.read/write as JSON, plus localStorage.',
     tags: ['storage', 'file system'],
-    build: () =>
+    host: 'shared',
+    build: (app = 'PS') =>
       project('Settings storage', {
-        'manifest.json': manifest({ id: 'pg.settings', name: 'Settings Storage', panelId: 'settingsPanel', label: 'Settings' }),
+        'manifest.json': manifest({ id: 'pg.settings', name: 'Settings Storage', panelId: 'settingsPanel', label: 'Settings', app }),
         'index.html': settingsHtml,
         'index.js': settingsJs,
         'styles.css': baseCss
-      })
+      }, 'index.js', app)
   },
   {
     id: 'menus',
@@ -701,7 +706,89 @@ export const EXTRA_TEMPLATES: Template[] = [
   }
 ];
 
-export const TEMPLATES: Template[] = [...BASE_TEMPLATES, ...EXTRA_TEMPLATES];
+function inspectorTemplate(app: HostApp, id: string, label: string, description: string, api: string): Template {
+  return {
+    id, label, description, host: app, tags: ['panel', 'host API'],
+    build: () => project(label, {
+      'manifest.json': manifest({ id: 'pg.' + id, name: label, panelId: 'inspector', label, app }),
+      'index.html': `<!DOCTYPE html>
+<html>
+  <head><link rel="stylesheet" href="styles.css" /></head>
+  <body>
+    <div class="inspector">
+      <sp-heading size="S">${label}</sp-heading>
+      <sp-body id="summary" size="S">Click Refresh to read from the host.</sp-body>
+      <sp-button id="refresh">Refresh</sp-button>
+    </div>
+    <script src="index.js"></script>
+  </body>
+</html>
+`,
+      'styles.css': `body { margin: 0; padding: 0; }
+.inspector { display: flex; flex-direction: column; align-items: flex-start; padding: 12px; }
+#summary { margin: 4px 0 12px; }
+`,
+      'index.js': `${api}
+const summary = document.getElementById("summary");
+document.getElementById("refresh").addEventListener("click", async () => {
+  try {
+    summary.textContent = await inspect();
+  } catch (error) {
+    summary.textContent = error.message || String(error);
+  }
+});
+`
+    }, 'index.js', app)
+  };
+}
+
+const HOST_STARTERS: Template[] = [
+  inspectorTemplate('premierepro', 'premiere-sequence', 'Premiere Pro active sequence', 'Read the current project and sequence names.', `const { Project } = require("premierepro");
+
+async function inspect() {
+  const project = await Project.getActiveProject();
+  if (!project) return "Open a Premiere Pro project and try again.";
+  const sequence = await project.getActiveSequence();
+  return project.name + " · " + (sequence ? sequence.name : "No active sequence");
+}`),
+  inspectorTemplate('ID', 'indesign-pages', 'InDesign document pages', 'Read the active document name and page count.', `const { app } = require("indesign");
+
+function inspect() {
+  if (!app.documents.length) return "Open an InDesign document and try again.";
+  const doc = app.activeDocument;
+  return doc.name + " · " + doc.pages.length + " pages";
+}`),
+  inspectorTemplate('ame', 'media-encoder-queue', 'Media Encoder render queue', 'Read the queue status without starting a render.', `const { RenderQueue } = require("mediaencoder");
+
+function inspect() {
+  const status = RenderQueue.getInstance().getStatus();
+  switch (status) {
+    case RenderQueue.RENDER_QUEUE_STOPPED: return "Queue stopped";
+    case RenderQueue.RENDER_QUEUE_RUNNING: return "Queue running";
+    case RenderQueue.RENDER_QUEUE_PAUSED: return "Queue paused";
+    case RenderQueue.RENDER_QUEUE_STOPPING: return "Queue stopping";
+    default: return "Queue status: " + status;
+  }
+}`),
+  inspectorTemplate('aftereffects', 'after-effects-project', 'After Effects project items', 'Read the item count and current selection in After Effects Beta.', `const app = require("aftereffects");
+
+function inspect() {
+  const project = app.project;
+  if (!project) return "Open an After Effects project and try again.";
+  const item = project.activeItem;
+  return project.numItems + " project items · " + (item ? item.name : "No active item");
+}`)
+];
+
+export const TEMPLATES: Template[] = [BASE_TEMPLATES[0], ...HOST_STARTERS, ...BASE_TEMPLATES.slice(1), ...EXTRA_TEMPLATES];
+
+export function templateHash(template: Template, app: HostApp = 'PS'): string {
+  return '#template=' + template.id + (template.host === 'shared' && app !== 'PS' ? '&host=' + app : '');
+}
+
+export function buildTemplate(template: Template, app: HostApp = 'PS'): Project {
+  return template.build(template.host === 'shared' ? app : undefined);
+}
 
 export function templateById(id: string): Template {
   return TEMPLATES.find((t) => t.id === id) ?? TEMPLATES[0];

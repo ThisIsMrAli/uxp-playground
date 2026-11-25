@@ -101,6 +101,28 @@ describe('preview runtime (jsdom)', () => {
     expect(win.__pg.domainAllowed('https://example.org/a')).toBe(true);
   });
 
+  it('keeps the Premiere host name used by cross-host bundles and simulates importing a temporary file', async () => {
+    const p = templateById('premiere-sequence').build();
+    p.files['index.js'] = `
+      const { host, storage } = require('uxp');
+      window.result = (async () => {
+        const { Project } = require(host.name.toLowerCase());
+        const project = await Project.getActiveProject();
+        const folder = await storage.localFileSystem.getTemporaryFolder();
+        const entry = await folder.createFile('captions.srt');
+        await entry.write('Caption text');
+        return [
+          await project.importFiles([entry.nativePath], true),
+          await project.importFiles(['/missing.srt'], true),
+          await project.importFiles([folder.nativePath], true)
+        ];
+      })();
+    `;
+    const { win, hostCalls } = boot(p);
+    expect(await win.result).toEqual([true, false, false]);
+    expect(hostCalls().filter((c: any) => c.fn === 'Project.importFiles').map((c: any) => c.result)).toEqual([true, false, false]);
+  });
+
   it('resolves relative requires and JSON, and explains missing npm packages', async () => {
     const p = withScript(`
       const util = require('./lib/util');

@@ -1227,7 +1227,7 @@
   }
 
   function hostName(app) {
-    return { PS: 'Photoshop', ID: 'InDesign', premierepro: 'premierepro' }[app] || String(app || '');
+    return { PS: 'Photoshop', ID: 'InDesign', premierepro: 'premierepro', ame: 'mediaencoder', aftereffects: 'aftereffects' }[app] || String(app || '');
   }
   function runLifecycle() {
     var cfg = entrypointsConfig || {};
@@ -1411,16 +1411,51 @@
     Project: {
       getActiveProject: function () {
         return hostCall('premierepro', 'Project.getActiveProject', [], function () {
-          return Promise.resolve({ name: 'Mock Project.prproj', getActiveSequence: function () { return hostCall('premierepro', 'Project.getActiveSequence', [], function () { return Promise.resolve({ name: 'Sequence 01' }); }); } });
+          return Promise.resolve({
+            name: 'Mock Project.prproj',
+            getActiveSequence: function () {
+              return hostCall('premierepro', 'Project.getActiveSequence', [], function () { return Promise.resolve({ name: 'Sequence 01' }); });
+            },
+            importFiles: function (paths, suppressUI) {
+              return hostCall('premierepro', 'Project.importFiles', [paths, suppressUI], function () {
+                var exists = Array.isArray(paths) && paths.length > 0 && paths.every(function (path) {
+                  var entry = mem[urlToPath(path)];
+                  return entry && entry.type === 'file';
+                });
+                note('premierepro', 'Project.importFiles checks the preview file system. Open the plugin in Premiere Pro to import into a real project.');
+                return Promise.resolve(exists);
+              });
+            }
+          });
         });
       }
     }
   };
   var indesign = {
     app: {
-      get documents() { return { length: 0, item: function () { return null; } }; },
-      get activeDocument() { note('indesign', 'app.activeDocument: no document in the playground stub'); return null; },
+      get documents() { return { length: 1 }; },
+      get activeDocument() {
+        return hostCall('indesign', 'app.activeDocument', [], function () { return { name: 'Mock Layout.indd', pages: { length: 3 } }; });
+      },
       doScript: function () { note('indesign', 'app.doScript is not simulated'); }
+    }
+  };
+  var mediaEncoder = {
+    RenderQueue: {
+      RENDER_QUEUE_RUNNING: 2,
+      RENDER_QUEUE_STOPPED: 0,
+      RENDER_QUEUE_PAUSED: 3,
+      RENDER_QUEUE_STOPPING: 4,
+      getInstance: function () {
+        return { getStatus: function () {
+          return hostCall('mediaencoder', 'RenderQueue.getStatus', [], function () { return mediaEncoder.RenderQueue.RENDER_QUEUE_STOPPED; });
+        } };
+      }
+    }
+  };
+  var afterEffects = {
+    get project() {
+      return hostCall('aftereffects', 'app.project', [], function () { return { numItems: 3, activeItem: { name: 'Mock Composition' } }; });
     }
   };
 
@@ -1477,6 +1512,8 @@
     uxp: function () { return uxpModule; },
     premierepro: function () { return premierepro; },
     indesign: function () { return indesign; },
+    mediaencoder: function () { return mediaEncoder; },
+    aftereffects: function () { return afterEffects; },
     os: function () { return osModule; },
     fs: function () { return fsModule; },
     react: function () { return loadVendor().React; },
@@ -1509,7 +1546,7 @@
       if (name.charAt(0) !== '.' && name.charAt(0) !== '/' && name.indexOf('plugin:') !== 0) {
         var pkg = name.charAt(0) === '@' ? name.split('/').slice(0, 2).join('/') : name.split('/')[0];
         if (!missingPackages[pkg]) { missingPackages[pkg] = true; post('missing-package', { name: pkg, from: from }); }
-        var err = new Error('Cannot find module "' + name + '" (required from ' + (from || 'the page') + '). npm packages need the project bundler; the playground provides photoshop, uxp, os, fs, premierepro, indesign, react and react-dom.');
+        var err = new Error('Cannot find module "' + name + '" (required from ' + (from || 'the page') + '). npm packages need the project bundler.');
         err.code = 'MODULE_NOT_FOUND';
         throw err;
       }

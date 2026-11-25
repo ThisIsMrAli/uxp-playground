@@ -85,6 +85,11 @@ describe('manifest checks', () => {
     expect(d[0].ruleId).toBe('manifest/json');
     expect(d[0].line).toBe(3);
   });
+  it('reports non-object JSON as a manifest error', () => {
+    for (const source of ['null', '[]', '"plugin"']) {
+      expect(parseManifest(source)).toMatchObject({ ok: false, value: {}, error: 'manifest.json must contain a JSON object' });
+    }
+  });
   it('flags missing fields, bad permission values and missing main', () => {
     const m = JSON.stringify({ manifestVersion: 5, id: 'x', name: 'n', version: '1.0.0', main: 'nope.html', host: { app: 'PS', minVersion: '24.4.0' }, entrypoints: [{ type: 'panel', id: 'p' }, { type: 'panel', id: 'p' }], requiredPermissions: { localFileSystem: 'yes', enableUserInfo: true } }, null, 2);
     const ids = checkManifest(m, {}, { app: 'PS', uxp: '9.2' }).map((d) => d.ruleId);
@@ -124,6 +129,8 @@ describe('export zip', () => {
       const files = unzipSync(r.zip);
       const manifest = JSON.parse(strFromU8(files['manifest.json']));
       expect(manifest.manifestVersion).toBe(5);
+      expect(manifest.host.app).toBe(p.target.app);
+      expect(r.problems, t.id).toEqual([]);
       expect(files[manifest.main]).toBeTruthy();
       for (const [name, data] of Object.entries(files)) {
         if (!name.endsWith('.js') || name.startsWith('vendor/')) continue;

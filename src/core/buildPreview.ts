@@ -1,5 +1,6 @@
 import { compileModule, isScript, type CompiledModule, usesReact } from './compile';
 import { parseManifest } from './manifest';
+import { HOSTS, hostInfo } from './hosts';
 import { isBinaryContent, resolveRelative } from './files';
 import type { Project } from './types';
 
@@ -30,8 +31,9 @@ export interface PreviewBuild {
   unresolvedPackages: string[];
 }
 
-export const HOST_VERSION: Record<string, string> = { PS: '27.4.0', ID: '21.0.0', premierepro: '26.0.0' };
-export const PLAYGROUND_BUILTINS = ['photoshop', 'uxp', 'premierepro', 'indesign', 'os', 'fs', 'react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'];
+export const PLAYGROUND_BUILTINS: string[] = [...HOSTS.map(({ module }) => module), 'uxp', 'os', 'fs', 'react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'];
+// Multi-host bundles can guard Adobe modules that have no public playground target.
+export const HOST_MODULES: string[] = [...HOSTS.map(({ module }) => module), 'illustrator'];
 
 function jsonForScript(v: unknown): string {
   return JSON.stringify(v).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
@@ -95,7 +97,7 @@ export function buildPreview(p: Project, assets: RuntimeAssets): PreviewBuild {
     if (usesReact(c.code)) needsReact = true;
     for (const m of c.code.matchAll(/\brequire\(\s*['"]([^'"./][^'"]*)['"]\s*\)/g)) {
       const name = m[1].replace(/^adobe:/, '');
-      if (!PLAYGROUND_BUILTINS.includes(name) && !name.startsWith('plugin:')) unresolved.add(name.startsWith('@') ? name.split('/').slice(0, 2).join('/') : name.split('/')[0]);
+      if (!PLAYGROUND_BUILTINS.includes(name) && !HOST_MODULES.includes(name) && !name.startsWith('plugin:')) unresolved.add(name.startsWith('@') ? name.split('/').slice(0, 2).join('/') : name.split('/')[0]);
     }
   }
 
@@ -169,9 +171,10 @@ export function buildPreview(p: Project, assets: RuntimeAssets): PreviewBuild {
     tail = `<script>__pg.missing("manifest.json", ${JSON.stringify(manifest.main)});</script>`;
   }
 
+  const host = hostInfo(p.target.app);
   const boot = {
     manifest,
-    target: { app: p.target.app, uxp: p.target.uxp, hostVersion: HOST_VERSION[p.target.app] },
+    target: { app: p.target.app, uxp: p.target.uxp, hostVersion: host?.previewVersion },
     modules,
     sources: Object.fromEntries(Object.entries(p.files).filter(([, v]) => v.length < 2_000_000)),
     shimCss: assets.shimCss,

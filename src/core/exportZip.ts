@@ -1,8 +1,9 @@
 import { strFromU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import { compileModule, isScript, needsCompile, outputPath, REACT_MODULES, usesReact } from './compile';
 import { parseManifest } from './manifest';
+import { hostInfo } from './hosts';
 import { fileBytes, isBinaryContent, resolveRelative } from './files';
-import { PLAYGROUND_BUILTINS } from './buildPreview';
+import { HOST_MODULES, PLAYGROUND_BUILTINS } from './buildPreview';
 import type { Project } from './types';
 
 export interface ExportResult {
@@ -79,7 +80,7 @@ export function exportFiles(p: Project, vendorBundle: string | null): { files: R
       if (usesReact(js)) reactUsed = true;
       for (const m of js.matchAll(/\brequire\(\s*['"]([^'"./][^'"]*)['"]\s*\)/g)) {
         const name = m[1].replace(/^adobe:/, '');
-        if (!PLAYGROUND_BUILTINS.includes(name) && !name.startsWith('plugin:')) unresolved.add(name);
+        if (!PLAYGROUND_BUILTINS.includes(name) && !HOST_MODULES.includes(name) && !name.startsWith('plugin:')) unresolved.add(name);
       }
       out[outputPath(path)] = rewriteForExport(path, js, p.files, generated);
     } else if (/\.html?$/i.test(path)) {
@@ -107,13 +108,25 @@ export function exportFiles(p: Project, vendorBundle: string | null): { files: R
       Object.assign(out, VENDOR_SHIMS);
     }
   }
+  const manifest = parseManifest(out['manifest.json']).value;
+  const hosts = Array.isArray(manifest.host) ? manifest.host : [manifest.host];
+  const hasMenuEntry = Array.isArray(manifest.entrypoints) && manifest.entrypoints.some((entry: any) => entry?.type === 'panel' || entry?.type === 'command');
+  const hostSteps = hosts.filter((host: any) => host?.app).map((host: any) => {
+    const info = hostInfo(host.app);
+    return [
+      `- ${info?.label ?? host.app}${host.minVersion ? ' ' + host.minVersion + ' or later' : ''}`,
+      info?.setup,
+      hasMenuEntry && info?.menu ? `Reopen the panel or command from ${info.menu}.` : ''
+    ].filter(Boolean).join('\n  ');
+  });
   out['PLAYGROUND-README.txt'] = [
     `${p.name} — exported from UXP Playground`,
     '',
     'How to load it:',
     '1. Unzip this archive into a folder.',
-    '2. Open the UXP Developer Tool (UDT), choose "Add Plugin" and select manifest.json in that folder.',
-    '3. Start your host app, then choose Load in UDT.',
+    '2. Enable Developer Mode in the UXP Developer Tool (UDT) and open the host listed below.',
+    '3. In UDT, choose Add Plugin, select manifest.json in the extracted folder, then choose Load.',
+    ...hostSteps,
     '',
     'JSX/TypeScript/ES-module files were compiled to plain CommonJS .js files.',
     reactUsed ? 'React 19 is included as vendor/react-bundle.js (production build).' : '',
@@ -131,12 +144,9 @@ export function validatePluginFiles(files: Record<string, string | Uint8Array>):
   const names = Object.keys(files);
   const text = (k: string) => (typeof files[k] === 'string' ? (files[k] as string) : strFromU8(files[k] as Uint8Array));
   if (files['manifest.json'] == null) return ['manifest.json is not at the root of the plugin folder'];
-  let m: any;
-  try {
-    m = JSON.parse(text('manifest.json'));
-  } catch {
-    return ['manifest.json is not valid JSON'];
-  }
+  const parsed = parseManifest(text('manifest.json'));
+  if (!parsed.ok) return [parsed.error === 'manifest.json must contain a JSON object' ? parsed.error : 'manifest.json is not valid JSON'];
+  const m = parsed.value;
   for (const k of ['id', 'name', 'version', 'host']) if (m[k] == null) problems.push(`manifest.json has no "${k}"`);
   const main = typeof m.main === 'string' ? m.main.replace(/^\.\//, '') : null;
   if (main && files[main] == null) problems.push(`"main" file is missing: ${main}`);
@@ -171,7 +181,8 @@ export function buildPluginZip(p: Project, vendorBundle: string | null): ExportR
   }
   const zip = zipSync(tree);
   const m = parseManifest(p.files['manifest.json']).value;
-  const fileName = `${slug(m.name || p.name)}-${m.version || '1.0.0'}.zip`;
+  const name = typeof m.name === 'string' ? m.name : m.name?.default;
+  const fileName = `${slug(typeof name === 'string' && name ? name : p.name)}-${m.version || '1.0.0'}.zip`;
   const problems = validatePluginFiles(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, isBinaryContent(v) ? fileBytes(v) : v])));
   return { zip, fileName, files: Object.keys(files).sort(), warnings, problems };
 }

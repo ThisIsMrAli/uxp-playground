@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Preview, postToPreview, type EntrypointInfo } from './Preview';
-import { templateById, TEMPLATES } from '../core/templates';
+import { buildTemplate, templateById, templateHash, TEMPLATES } from '../core/templates';
 import { buildPreview, type RuntimeAssets, type PreviewBuild } from '../core/buildPreview';
 import { buildPluginZip, readZip } from '../core/exportZip';
 import { panelSize, parseManifest, primaryHost, type Diagnostic } from '../core/manifest';
@@ -9,7 +9,8 @@ import { loadGist } from '../core/gist';
 import { importGithub, parseGithubSpec, specToString } from '../core/github';
 import { importTree, ImportError, type ImportReport, type RawFiles } from '../core/importer';
 import { bytesToBase64, base64ToBytes, isBinaryContent, humanSize, fileSize } from '../core/files';
-import { HOSTS, PS_UXP_TABLE, UXP_VERSIONS } from '../core/versions';
+import { HOSTS, hostInfo, type HostApp } from '../core/hosts';
+import { PS_UXP_TABLE, UXP_VERSIONS } from '../core/versions';
 import type { LogEntry, Project, Theme } from '../core/types';
 import { LintClient } from '../lint/client';
 import type { LintResponse } from '../lint/adapter';
@@ -26,6 +27,7 @@ import { Gallery, loadExampleFiles, loadExampleIndex, type ExampleMeta } from '.
 import { ImportDialog } from './components/ImportDialog';
 import { ShareDialog } from './components/ShareDialog';
 import { Welcome } from './components/Welcome';
+import { HostDialog } from './components/HostDialog';
 import runtimeSrc from '../runtime/runtime.js?raw';
 import panelCss from '../runtime/panel.css?raw';
 import shimCss from '../runtime/shim.css?raw';
@@ -61,7 +63,7 @@ const DOCS = {
 
 type BottomTab = 'console' | 'host' | 'problems' | 'manifest' | 'about';
 type MobileView = 'files' | 'code' | 'preview' | 'output';
-type DialogId = 'import' | 'share' | 'shortcuts' | 'gallery' | null;
+type DialogId = 'import' | 'share' | 'shortcuts' | 'gallery' | 'run-host' | null;
 interface Banner {
   kind: 'info' | 'warn' | 'error';
   text: string;
@@ -246,9 +248,9 @@ export function App() {
   );
 
   const openTemplate = useCallback(
-    (id: string) => {
+    (id: string, app?: HostApp) => {
       const t = templateById(id);
-      loadProject(t.build(), `New project from "${t.label}"`, { origin: location.origin + location.pathname + '#template=' + t.id });
+      loadProject(buildTemplate(t, app), `New project from "${t.label}"`, { origin: location.origin + location.pathname + templateHash(t, app) });
       setDialog(null);
     },
     [loadProject]
@@ -318,7 +320,7 @@ export function App() {
     else if (pending?.kind === 'gist') openGist(pending.id).catch(fail('gist ' + pending.id)).finally(() => setRoutePending(false));
     else if (pending?.kind === 'template') {
       const t = TEMPLATES.find((x) => x.id === pending.id);
-      if (t) loadProject(t.build(), null, { keepHash: true, origin: location.href });
+      if (t) loadProject(buildTemplate(t, pending.host), null, { keepHash: true, origin: location.href });
       else fail('template')(new Error(`no template "${pending.id}"`));
     } else if (pending?.kind === 'example') {
       setLoading('Loading example…');
@@ -338,10 +340,14 @@ export function App() {
     const dq = matchMedia('(prefers-color-scheme: dark)');
     const onMq = () => setNarrow(mq.matches);
     const onDq = () => setSystemDark(dq.matches);
+    // Opening a project link in this tab must also rerun the initial route loader.
+    const onHash = () => { if (readHash(location.hash)) location.reload(); };
+    window.addEventListener('hashchange', onHash);
     mq.addEventListener('change', onMq);
     dq.addEventListener('change', onDq);
     return () => {
       lint.current?.dispose();
+      window.removeEventListener('hashchange', onHash);
       mq.removeEventListener('change', onMq);
       dq.removeEventListener('change', onDq);
     };
@@ -379,7 +385,7 @@ export function App() {
     setBuild(b);
     setReady(false);
     const sys: LogEntry[] = b.compileErrors.map((e) => ({ kind: 'error', level: 'error', text: e.message, file: e.file, line: e.line, time: Date.now() }));
-    if (!b.entryHtml && !b.headless) sys.push({ kind: 'system', level: 'warn', text: 'No panel HTML to show: set "main" in manifest.json to an .html file (or a .js file for a headless plugin).', file: 'manifest.json', time: Date.now() });
+    if (!b.entryHtml && !b.headless) sys.push({ kind: 'system', level: 'warn', text: 'No plugin entry file to show. Check "main" in manifest.json.', file: 'manifest.json', time: Date.now() });
     // Missing scripts are reported by the runtime when the panel tries to load them; list the rest here.
     for (const m of b.missing.filter((x) => !/\.(js|jsx|ts|tsx|mjs|cjs)$/i.test(x))) sys.push({ kind: 'system', level: 'warn', text: `${m} is referenced by ${b.entryHtml} but is not in the project.`, file: b.entryHtml || undefined, time: Date.now() });
     setLogs(sys);
@@ -706,10 +712,11 @@ export function App() {
       ...entrypoints.commands.map((c) => ({ id: 'cmd-' + c, title: `Invoke command: ${c}`, group: 'Plugin', icon: 'command', run: () => runCommand(c) })),
       { id: 'share', title: 'Share link or embed code…', group: 'Project', icon: 'share', run: () => setDialog('share') },
       { id: 'zip', title: 'Download plugin .zip (for UXP Developer Tool)', group: 'Project', icon: 'download', run: doZip },
+      { id: 'run-host', title: 'Run in host…', group: 'Project', icon: 'play', run: () => setDialog('run-host') },
       { id: 'json', title: 'Save project as .json', group: 'Project', icon: 'file', run: doJson },
       { id: 'import', title: 'Import from GitHub, zip, folder or gist…', group: 'Project', icon: 'upload', run: () => setDialog('import') },
       { id: 'gallery', title: 'Browse examples…', group: 'Project', icon: 'book', run: () => setDialog('gallery') },
-      ...TEMPLATES.map((t) => ({ id: 'tpl-' + t.id, title: `New from starter: ${t.label}`, group: 'Starters', icon: 'sparkle', run: () => openTemplate(t.id) })),
+      ...TEMPLATES.map((t) => ({ id: 'tpl-' + t.id, title: `New from starter: ${t.label}`, group: 'Starters', icon: 'sparkle', run: () => openTemplate(t.id, project.target.app) })),
       { id: 'console', title: 'Show console', group: 'View', icon: 'terminal', run: () => showBottom('console') },
       { id: 'host', title: 'Show host calls', group: 'View', icon: 'layers', run: () => showBottom('host') },
       { id: 'problems', title: 'Show problems', group: 'View', icon: 'alert', run: () => showBottom('problems') },
@@ -724,7 +731,7 @@ export function App() {
       { id: 'about', title: 'What the preview simulates', group: 'Help', icon: 'info', run: () => showBottom('about') }
     ];
     return cmds;
-  }, [rebuild, autoRun, entrypoints.commands, runCommand, doZip, doJson, openTemplate, showBottom, toggleSidebar, toggleBottom, appTheme, cycleTheme, prefs.fontSize, setPrefs]);
+  }, [rebuild, autoRun, entrypoints.commands, runCommand, doZip, doJson, openTemplate, project.target.app, showBottom, toggleSidebar, toggleBottom, appTheme, cycleTheme, prefs.fontSize, setPrefs]);
   const fileCommands = useMemo<PaletteCommand[]>(
     () => Object.keys(project.files).sort().map((f) => ({ id: 'file:' + f, title: f, group: 'Files', icon: 'file', run: () => openFile(f) })),
     [project.files, openFile]
@@ -854,8 +861,7 @@ export function App() {
           <div className="banner-main">
             <Icon name="alert" size={14} />
             <span>
-              npm package{missingPackages.length > 1 ? 's' : ''} not available in the playground: <code>{missingPackages.join(', ')}</code>. Code that requires {missingPackages.length > 1 ? 'them' : 'it'} fails here; the playground only provides{' '}
-              <code>photoshop</code>, <code>uxp</code>, <code>os</code>, <code>fs</code> and React.
+              Modules unavailable in the browser preview: <code>{missingPackages.join(', ')}</code>. Import the built plugin folder if your project uses an npm bundler.
             </span>
           </div>
         </div>
@@ -872,7 +878,7 @@ export function App() {
           <Icon name="eye" size={28} />
           <h3>Nothing to preview</h3>
           <p>
-            Set <code>"main"</code> in manifest.json to your panel's HTML file. Plugins whose <code>main</code> is a .js file have no UI; their commands still run from the toolbar.
+            Set <code>"main"</code> in manifest.json to your plugin's entry file.
           </p>
         </div>
       ) : (
@@ -990,7 +996,10 @@ export function App() {
       <div className="target">
         <label className="field compact">
           <span className="sr-only">Host app</span>
-          <select data-testid="host" value={project.target.app} onChange={(e) => setProject((p) => ({ ...p, target: { ...p.target, app: e.target.value as any } }))} title="Host app to mock">
+          <select data-testid="host" value={project.target.app} onChange={(e) => {
+            const host = hostInfo(e.target.value);
+            if (host) setProject((p) => ({ ...p, target: { app: host.id, uxp: host.uxp } }));
+          }} title="Host app to preview">
             {HOSTS.map((h) => (
               <option key={h.id} value={h.id}>
                 {h.label}
@@ -1020,8 +1029,11 @@ export function App() {
         <Icon name="share" size={14} /> <span className="hide-sm">Share</span>
       </button>
       <div className="split-btn">
-        <button className="btn primary" onClick={doZip} data-testid="download-zip" title="Plugin zip you can load in UXP Developer Tool">
-          <Icon name="download" size={14} /> <span className="hide-sm">Download .zip</span>
+        <button className="btn primary" onClick={() => setDialog('run-host')} data-testid="run-host" title="Run in host" aria-label="Run in host">
+          <Icon name="play" size={14} /> <span className="hide-sm">Run in host</span>
+        </button>
+        <button className="btn primary" onClick={doZip} data-testid="download-zip" title="Download plugin .zip" aria-label="Download plugin .zip">
+          <Icon name="download" size={14} />
         </button>
         <button className="btn primary" onClick={doJson} data-testid="download-json" title="Save the playground project as .json" aria-label="Save project as .json">
           .json
@@ -1130,6 +1142,7 @@ export function App() {
       )}
       {welcome && (
         <Welcome
+          target={project.target.app}
           onClose={() => {
             setWelcome(false);
             setPrefs({ seenWelcome: true });
@@ -1138,9 +1151,9 @@ export function App() {
             setPrefs({ seenWelcome: true });
             openExample(m);
           }}
-          onOpenTemplate={(id) => {
+          onOpenTemplate={(id, app) => {
             setPrefs({ seenWelcome: true });
-            openTemplate(id);
+            openTemplate(id, app);
           }}
           onImport={() => {
             setWelcome(false);
@@ -1157,7 +1170,7 @@ export function App() {
       )}
       {dialog === 'gallery' && (
         <Dialog title="Examples" onClose={() => setDialog(null)} wide testId="gallery-dialog" className="gallery-dialog">
-          <Gallery onOpenExample={openExample} onOpenTemplate={openTemplate} onCopyLink={(hash) => copyText(shareBase + hash, 'Link')} />
+          <Gallery target={project.target.app} onOpenExample={openExample} onOpenTemplate={openTemplate} onCopyLink={(hash) => copyText(shareBase + hash, 'Link')} />
         </Dialog>
       )}
       {dialog === 'import' && (
@@ -1179,6 +1192,7 @@ export function App() {
         />
       )}
       {dialog === 'share' && <ShareDialog project={projectForShare} base={shareBase} origin={origin} onClose={() => setDialog(null)} onCopied={(w) => say(w + ' copied')} />}
+      {dialog === 'run-host' && <HostDialog project={project} onClose={() => setDialog(null)} onDownload={doZip} />}
       {dialog === 'shortcuts' && <Shortcuts onClose={() => setDialog(null)} />}
       {palette != null && (
         <CommandPalette
@@ -1250,9 +1264,8 @@ function About({ host }: { host: { app?: string; minVersion?: string } }) {
         flagging unknown APIs, and the JavaScript itself (it runs in your browser's engine, not UXP's).
       </p>
       <p>
-        <strong>Approximated:</strong> the panel's look (Spectrum UXP widgets are re-created with web components), theme colours, the <code>photoshop</code>, <code>uxp</code>,{' '}
-        <code>premierepro</code>, <code>indesign</code>, <code>os</code> and <code>fs</code> modules (hand-written mocks with one sample document), permission checks and the modal-scope rule (enforced
-        for <code>apiVersion</code> 2, as in Photoshop{host.minVersion ? `; this manifest targets ${host.app} ${host.minVersion}` : ''}).
+        <strong>Approximated:</strong> Spectrum widgets, theme colours, sample data for each host, and UXP permission checks. Photoshop previews enforce the modal-scope rule for <code>apiVersion</code> 2.
+        {host.minVersion && ` This manifest targets ${hostInfo(host.app)?.label ?? host.app} ${host.minVersion} or later.`}
       </p>
       <p>
         <strong>Not simulated:</strong> UXP's layout engine and its CSS limits, host fonts, real batchPlay results for most events, history, real pixels, WebViews, entrypoint timeouts, the real file

@@ -1,4 +1,6 @@
-export type HostApp = 'PS' | 'ID' | 'premierepro';
+import type { HostApp } from './hosts';
+
+export type { HostApp } from './hosts';
 export type Theme = 'darkest' | 'dark' | 'medium' | 'light' | 'lightest';
 
 export interface Target {

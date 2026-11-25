@@ -46,6 +46,49 @@ for (const ex of examples) {
   });
 }
 
+const hostStarters = [
+  ['ID', 'indesign-pages', 'Mock Layout.indd · 3 pages'],
+  ['premierepro', 'premiere-sequence', 'Mock Project.prproj · Sequence 01'],
+  ['ame', 'media-encoder-queue', 'Queue stopped'],
+  ['aftereffects', 'after-effects-project', '3 project items · Mock Composition']
+];
+
+for (const [host, id, summary] of hostStarters) {
+  test(`host starter ${id} renders and reads sample data`, async ({ page }) => {
+    await fresh(page, '#template=' + id);
+    await expect(page.getByTestId('host')).toHaveValue(host);
+    await frame(page).locator('#refresh').click();
+    await expect(frame(page).locator('#summary')).toHaveText(summary);
+    await expect(page.getByTestId('preview-col')).toHaveAttribute('data-errors', '0');
+  });
+}
+
+test('host gallery, shared starter link and native export agree on the manifest host', async ({ page }) => {
+  await fresh(page);
+  await page.getByTestId('examples').click();
+  const gallery = page.getByTestId('gallery-dialog');
+  await gallery.getByRole('combobox', { name: 'Example host' }).selectOption('premierepro');
+  await expect(gallery.getByTestId('template-premiere-sequence')).toBeVisible();
+  await expect(gallery.getByTestId('example-hello-world-panel')).toHaveCount(0);
+  await gallery.getByTestId('template-file-picker').click();
+  await expect(page.getByTestId('host')).toHaveValue('premierepro');
+  await page.getByTestId('share').click();
+  await expect(page.getByTestId('origin-url')).toHaveValue(/#template=file-picker&host=premierepro$/);
+  await page.keyboard.press('Escape');
+  await page.getByTestId('host').selectOption('PS');
+  await page.getByTestId('run-host').click();
+  const guide = page.getByTestId('run-host-dialog');
+  await expect(guide.getByText('Premiere Pro 25.6.0 or later')).toBeVisible();
+  await expect(guide.getByText('Window → UXP Plugins')).toBeVisible();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    guide.getByTestId('host-download-zip').click()
+  ]);
+  expect(download.suggestedFilename()).toBe('file-picker-1.0.0.zip');
+  await page.evaluate(() => { location.hash = 'template=file-picker&host=ID'; });
+  await expect(page.getByTestId('host')).toHaveValue('ID');
+});
+
 test('workbench: batchPlay inspector explains descriptors and generates code', async ({ page }) => {
   await fresh(page);
   await page.getByTestId('examples').click();

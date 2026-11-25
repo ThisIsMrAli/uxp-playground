@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { parseManifest, primaryHost } from '../../core/manifest';
+import { HOSTS } from '../../core/hosts';
 import { Icon } from './Icon';
 
 type M = any;
@@ -102,10 +103,7 @@ export function ManifestPanel({ text, onChange, onOpenManifest }: { text: string
           <label>
             host.app
             <select value={host.app ?? 'PS'} onChange={(e) => setHost('app', e.target.value)}>
-              <option value="PS">PS</option>
-              <option value="ID">ID</option>
-              <option value="premierepro">premierepro</option>
-              <option value="ame">ame</option>
+              {HOSTS.map(({ id }) => <option key={id} value={id}>{id}</option>)}
             </select>
           </label>
           <label>

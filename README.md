@@ -2,14 +2,16 @@
 
 A browser playground for Adobe UXP plugins. Edit a plugin's files, see an **approximate** panel preview with mocked host APIs, lint it with ESLint and UXP rules, share it as a link, and download it as a plugin folder (.zip) you can load in the UXP Developer Tool (UDT).
 
-> The preview runs in a browser, not in the UXP engine. Spectrum UXP widgets, theme colours, CSS support and the `photoshop` / `uxp` modules are simulated. Always check the real result in UDT with your host app.
+[Open UXP Playground](https://thisismrali.github.io/uxp-playground/)
+
+> The browser preview uses sample data and approximates UXP widgets, layout, and APIs. Use **Run in host** to check the panel in its Adobe app.
 
 ## Features
 
 - **Multi-file editor** (Monaco): `manifest.json`, HTML, JS/JSX/TS, CSS and extra files or folders. Autocomplete and hovers come from the real Adobe typings (`@types/photoshop` 27.11.0, `@adobe/cc-ext-uxp-types` 7.3.1). `manifest.json` is checked against a manifest v5 schema.
-- **Target selectors**: host (Photoshop, InDesign, Premiere Pro), UXP version (6.0 to 9.2), theme (darkest, dark, medium, light, lightest) and panel size (the manifest's docked size or presets).
+- **Target selectors** for Photoshop, Premiere Pro, InDesign, Media Encoder, and After Effects Beta, plus UXP version, theme, and panel size.
 - **Live preview** in a sandboxed iframe (`allow-scripts allow-modals allow-forms`, no same-origin), framed like a host panel and labelled *Approximate*:
-  - CommonJS `require` for `photoshop`, `uxp`, `premierepro`, `indesign`, `react`, `react-dom`, relative files and JSON.
+  - CommonJS `require` for the supported hosts' API modules, `uxp`, React, relative files, and JSON.
   - JSX, TypeScript and ES modules are compiled with sucrase.
   - `sp-*` Spectrum UXP widgets are re-created as small web components: button, action-button, textfield, textarea, checkbox, radio(-group), switch, slider, picker/dropdown, menu, menu-item, progressbar, heading, body, detail, label, divider, link and icon.
 - **Host API mocks** with a *Host calls* log:
@@ -22,7 +24,7 @@ A browser playground for Adobe UXP plugins. Edit a plugin's files, see an **appr
   - Otherwise built-in fallback rules run.
   - Playground checks for the manifest are always on.
   - Results also show as editor squiggles.
-- **Examples gallery**: 10 of Adobe's own samples from `AdobeDocs/uxp-photoshop-plugin-samples` (pinned commit, licenses kept, see `public/examples/`) plus 9 starter templates (panel, batchPlay, React, file picker, layers DOM, notifications, imaging, settings storage, flyout menus and commands). Every example has a link (`#example=<id>`, `#template=<id>`).
+- **Examples gallery** with a host filter, a starter for each supported app, and shared file picker and settings examples for manifest v5 hosts. The gallery also includes Adobe's licensed Photoshop samples in `public/examples/`. Every sample can be opened from a link such as `#template=premiere-sequence` or `#template=file-picker&host=ID`.
 - **Import**: a GitHub repo or sub-folder (`#github=owner/repo/path`; monorepos ask which plugin and download only that one), a `.zip`/`.ccx`, a local folder (drag and drop anywhere), a public gist or a `playground.json`. Projects built with webpack/Vite get a small loader stub and a note instead of a blank panel.
 - **Share link**: the whole project is lz-string compressed into the URL hash, so nothing is uploaded. The share dialog shows the link size and which large binaries were left out. You can also save and open `playground.json`.
 - **Embed mode** for docs pages and blogs: `?embed=1` with `view=split|preview|editor`, `readonly=1`, `theme=light|dark`, `console=1`. Embeds never write the reader's storage and have an *Open in Playground* link. A host page can drive an embed with `postMessage` (`uxp-playground:load`, `:run`, `:set-file`; the embed answers `uxp-playground:ready` and `:ran`).
@@ -58,9 +60,14 @@ The page exposes `window.uxpPlayground` (`importFiles`, `getProject`, `setProjec
 
 ## Load an exported plugin in UDT
 
-1. Unzip the download.
-2. In UDT choose **Add Plugin** and pick `manifest.json`.
-3. Start the host app and click **Load**.
+1. Open a project and choose **Run in host** in the toolbar. The dialog shows the app and version declared in its manifest.
+2. Choose **Download plugin .zip** and extract it to a folder. Install UXP Developer Tools in Creative Cloud and enable Developer Mode.
+3. Open the target Adobe app and check that it appears under **Connected Apps** in UDT. Premiere Pro and Media Encoder also require Developer Mode in their Plugins preferences, followed by a restart.
+4. In UDT, choose **Add Plugin**, select the extracted `manifest.json`, then click **Load**. In Premiere Pro and Media Encoder, reopen the panel from **Window → UXP Plugins**.
+
+The hosted playground supports editing, browser previews, imports, sharing, and ZIP export online. Running a plugin inside an Adobe app uses the desktop app and UDT. [Adobe’s UXP Developer Tool guide](https://developer.adobe.com/uxp/guides/how-to/udt-deep-dive/)
+
+GitHub Actions builds and deploys the static `dist/` directory to GitHub Pages on pushes to `main`.
 
 ## What differs from real UXP
 
@@ -71,7 +78,7 @@ The page exposes `window.uxpPlayground` (`importFiles`, `getProject`, `setProjec
   - Most batchPlay events return `{}` and log "not simulated".
   - There is no real history, pixel-accurate imaging (a synthetic gradient stands in for pixels), real file system, consent dialogs, WebViews, neural filters or entrypoint timeouts.
   - npm packages other than React are not resolved: projects that need their bundler show a banner listing the packages.
-  - InDesign and Premiere Pro modules are only stubs.
+  - Premiere Pro, InDesign, Media Encoder, and After Effects provide limited sample data for their starter panels. Premiere's preview import checks files in the playground's virtual file system.
 - **Permission checks** follow Adobe's manifest v5 guide, but error messages are the playground's, except the modal-scope error, which copies Photoshop's wording.
 
 See `docs/RESEARCH.md` for the stack decisions and sources, and `docs/HARDENING.md` for the real-plugin test results.

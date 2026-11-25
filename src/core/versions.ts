@@ -1,5 +1,3 @@
-import type { HostApp } from './types';
-
 /**
  * UXP versions named in Adobe's Photoshop UXP changelog
  * (https://developer.adobe.com/photoshop/uxp/2022/ps-reference/changelog/, snapshot retrieved 2026-11-09).
@@ -22,13 +20,7 @@ export const PS_UXP_TABLE: { ps: string; uxp: string; released: string }[] = [
 ];
 
 /** UXP versions offered in the selector. */
-export const UXP_VERSIONS = ['6.0', '6.4', '6.5', '7.0', '7.1', '7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '9.0', '9.1', '9.2'];
-
-export const HOSTS: { id: HostApp; label: string; module: string }[] = [
-  { id: 'PS', label: 'Photoshop', module: 'photoshop' },
-  { id: 'ID', label: 'InDesign (stub APIs)', module: 'indesign' },
-  { id: 'premierepro', label: 'Premiere Pro (stub APIs)', module: 'premierepro' }
-];
+export const UXP_VERSIONS = ['6.0', '6.4', '6.5', '7.0', '7.1', '7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '9.0', '9.1', '9.2', '9.4'];
 
 export function cmpVersion(a: string, b: string): number {
   const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);

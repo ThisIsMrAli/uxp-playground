@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Icon } from './Icon';
-import { TEMPLATES } from '../../core/templates';
+import { templateHash, TEMPLATES } from '../../core/templates';
+import { HOSTS, hostInfo, type HostApp } from '../../core/hosts';
 
 export interface ExampleMeta {
   id: string;
@@ -9,6 +10,7 @@ export interface ExampleMeta {
   category: string;
   tags: string[];
   file: string;
+  host?: HostApp;
   origin?: { repo: string; path: string; commit?: string; license?: string; url?: string };
   note?: string;
 }
@@ -36,21 +38,45 @@ export async function loadExampleFiles(meta: ExampleMeta): Promise<Record<string
   return (await r.json()).files;
 }
 
-export function Gallery({ onOpenExample, onOpenTemplate, onCopyLink, compact }: { onOpenExample: (m: ExampleMeta) => void; onOpenTemplate: (id: string) => void; onCopyLink: (hash: string) => void; compact?: boolean }) {
+type GalleryProps = {
+  onOpenExample: (m: ExampleMeta) => void;
+  onOpenTemplate: (id: string, app?: HostApp) => void;
+  onCopyLink: (hash: string) => void;
+  target: HostApp;
+  compact?: boolean;
+};
+
+const starters = TEMPLATES.map((t) => ({
+  id: t.id, title: t.label, description: t.description, category: 'Starters', tags: t.tags || [],
+  host: t.host ?? 'PS', kind: 'template' as const, template: t
+}));
+
+export function Gallery({ onOpenExample, onOpenTemplate, onCopyLink, target, compact }: GalleryProps) {
   const [index, setIndex] = useState<ExampleIndex | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('All');
+  const [host, setHost] = useState<HostApp | 'all'>('all');
   useEffect(() => {
     loadExampleIndex().then(setIndex, (e) => setError(String(e.message || e)));
   }, []);
-  const starters = TEMPLATES.map((t) => ({ id: t.id, title: t.label, description: t.description, category: 'Starters', tags: t.tags || [] }));
-  const all = useMemo(() => [...starters.map((s) => ({ ...s, kind: 'template' as const })), ...(index?.examples || []).map((e) => ({ ...e, kind: 'example' as const }))], [index]);
-  const cats = ['All', ...Array.from(new Set(all.map((x) => x.category)))];
-  const shown = all.filter((x) => (cat === 'All' || x.category === cat) && (!q || (x.title + ' ' + x.description + ' ' + x.tags.join(' ')).toLowerCase().includes(q.toLowerCase())));
+  const sharedHost = host === 'all' ? target : host;
+  const all = [...starters, ...(index?.examples || []).map((e) => ({ ...e, host: e.host ?? 'PS', kind: 'example' as const }))];
+  const available = all.filter((x) => host === 'all' || x.host === host || x.host === 'shared');
+  const cats = ['All', ...new Set(available.map((x) => x.category))];
+  const hostLabel = (app: HostApp | 'shared') => app === 'shared' ? 'Shared UXP · ' + hostInfo(sharedHost)?.label : hostInfo(app)?.label;
+  const query = q.trim().toLowerCase();
+  const shown = available.filter((x) => (cat === 'All' || x.category === cat) && [x.title, x.description, hostLabel(x.host), ...x.tags].join(' ').toLowerCase().includes(query));
   return (
     <div className={'gallery' + (compact ? ' compact' : '')} data-testid="gallery">
       <div className="gallery-bar">
+        <label className="field compact gallery-host">
+          <span>Host</span>
+          <select aria-label="Example host" value={host} onChange={(e) => { setHost(e.target.value as HostApp | 'all'); setCat('All'); }}>
+            <option value="all">All hosts</option>
+            {HOSTS.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
+          </select>
+        </label>
         <div className="search-box">
           <Icon name="search" size={14} />
           <input placeholder="Search examples (batchPlay, React, file…)" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search examples" />
@@ -64,11 +90,12 @@ export function Gallery({ onOpenExample, onOpenTemplate, onCopyLink, compact }: 
         </div>
       </div>
       {error && <div className="banner warn">Examples could not be loaded: {error}</div>}
+      {!shown.length && <p className="muted" role="status">No examples match these filters.</p>}
       <ul className="cards">
         {shown.map((x) => (
           <li key={x.kind + x.id} className="card">
-            <button className="card-main" onClick={() => (x.kind === 'template' ? onOpenTemplate(x.id) : onOpenExample(x as ExampleMeta))} data-testid={`${x.kind}-${x.id}`}>
-              <span className="card-cat">{x.category}</span>
+            <button className="card-main" onClick={() => (x.kind === 'template' ? onOpenTemplate(x.id, sharedHost) : onOpenExample(x))} data-testid={`${x.kind}-${x.id}`}>
+              <span className="card-cat">{hostLabel(x.host)}</span>
               <strong className="card-title">{x.title}</strong>
               <span className="card-desc">{x.description}</span>
               <span className="card-tags">
@@ -78,11 +105,11 @@ export function Gallery({ onOpenExample, onOpenTemplate, onCopyLink, compact }: 
               </span>
             </button>
             <div className="card-actions">
-              <button className="icon-btn" title="Copy link to this example" aria-label={`Copy link to ${x.title}`} onClick={() => onCopyLink((x.kind === 'template' ? '#template=' : '#example=') + x.id)}>
+              <button className="icon-btn" title="Copy link to this example" aria-label={`Copy link to ${x.title}`} onClick={() => onCopyLink(x.kind === 'template' ? templateHash(x.template, sharedHost) : '#example=' + x.id)}>
                 <Icon name="share" size={13} />
               </button>
-              {x.kind === 'example' && (x as ExampleMeta).origin?.url && (
-                <a className="icon-btn" href={(x as ExampleMeta).origin!.url} target="_blank" rel="noreferrer" title="Source on GitHub" aria-label={`Source of ${x.title} on GitHub`}>
+              {x.kind === 'example' && x.origin?.url && (
+                <a className="icon-btn" href={x.origin.url} target="_blank" rel="noreferrer" title="Source on GitHub" aria-label={`Source of ${x.title} on GitHub`}>
                   <Icon name="github" size={13} />
                 </a>
               )}

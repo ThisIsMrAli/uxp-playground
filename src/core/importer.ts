@@ -5,7 +5,8 @@
  */
 import { decodeText, fileSize, isBinaryContent, isTextPath, toDataUrl } from './files';
 import { MAX_FILES, sanitizeProject, validFileName } from './share';
-import type { HostApp, Project } from './types';
+import type { Project } from './types';
+import { HOSTS } from './hosts';
 import { SCRIPT_RE } from './compile';
 
 export type RawFiles = Record<string, string | Uint8Array>;
@@ -83,15 +84,6 @@ export function manifestRoots(paths: string[], read?: (p: string) => string | nu
   // A built copy (dist/, build/) is a duplicate of the source plugin folder; list it last.
   const built = (r: string) => (/(^|\/)(dist|build|out)\/$/.test(r) ? 1 : 0);
   return roots.sort((a, b) => built(a) - built(b) || a.split('/').length - b.split('/').length || a.localeCompare(b));
-}
-
-function hostApp(m: any): HostApp {
-  const hosts = Array.isArray(m?.host) ? m.host : m?.host ? [m.host] : [];
-  const apps = hosts.map((h: any) => h && h.app);
-  if (apps.includes('PS')) return 'PS';
-  if (apps.includes('ID')) return 'ID';
-  if (apps.includes('premierepro')) return 'premierepro';
-  return 'PS';
 }
 
 function scriptRefs(html: string): string[] {
@@ -260,9 +252,11 @@ export function importTree(raw: RawFiles, opts: ImportOptions = {}): ImportResul
   }
   if (Object.keys(files).some((f) => /\.(vue|svelte)$/i.test(f))) notes.push('Vue/Svelte single-file components need the project bundler; the playground cannot compile them.');
 
+  const declaredHosts = Array.isArray(manifest?.host) ? manifest.host : [manifest?.host];
+  const host = declaredHosts.map((declared: any) => HOSTS.find(({ id }) => declared?.app === id)).find(Boolean);
   const project = sanitizeProject({
     name: opts.name || (typeof manifest.name === 'string' ? manifest.name : 'Imported plugin'),
-    target: { app: hostApp(manifest), uxp: '9.2' },
+    target: { app: host?.id ?? 'PS', uxp: host?.uxp ?? '9.2' },
     theme: 'dark',
     files,
     active: [entryStub?.entry, 'index.js', 'main.js', 'index.jsx', 'src/index.jsx', 'src/index.js', 'src/index.tsx', 'src/index.ts', mainHtml].find((f) => f && files[f] != null && !isBinaryContent(files[f])) || 'manifest.json'
