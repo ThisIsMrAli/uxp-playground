@@ -20,6 +20,16 @@ const nativeChecks: Record<string, NativeCheck> = {
     screenshot: 'host-checks/premiere-marker-csv.png',
     alt: 'Premiere Pro panel showing a saved CSV with one sequence marker and its review comment.'
   },
+  'premiere-review-notes': {
+    version: '26.5.2',
+    platform: 'macOS',
+    result: 'Added both sample review notes and checked the markers at one and three seconds on the Premiere timeline.'
+  },
+  'premiere-organize-bins': {
+    version: '26.5.2',
+    platform: 'macOS',
+    result: 'Moved a WAV and a PNG into newly created Audio and Stills bins in the Premiere Project panel.'
+  },
   'premiere-sequence': { version: '26.5.2', platform: 'macOS', result: 'Loaded in UXP Developer Tool and refreshed the project and sequence summary in Premiere Pro.' },
   hello: { version: '26.0', platform: 'macOS', result: 'Loaded in UXP Developer Tool and read the active document in Photoshop.' }
 };

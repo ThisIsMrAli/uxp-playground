@@ -20,7 +20,7 @@ interface PremiereRecipeDefinition {
 export const premiereRecipeStyles = `body { margin: 0; padding: 0; overflow-y: auto; }
 .recipe { display: flex; flex-direction: column; padding: 12px; }
 .recipe sp-heading, .recipe sp-body, .recipe sp-label { margin-bottom: 8px; }
-.recipe sp-textarea { margin-bottom: 12px; }
+.recipe sp-textarea { width: 100%; min-height: 90px; margin-bottom: 12px; }
 .actions { display: flex; flex-wrap: wrap; margin-bottom: 4px; }
 .actions sp-button { margin: 0 8px 8px 0; }
 #status, #output { white-space: pre-wrap; }
