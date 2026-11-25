@@ -1052,7 +1052,7 @@
           requireFsPermission('picker');
           var p = '/saved/' + (suggested || 'untitled.txt');
           if (!mem[p]) memWrite(p, '');
-          note('uxp', 'getFileForSaving: Photoshop would show a save dialog; the playground picked ' + p + '. Written content appears in the Console.');
+          note('uxp', 'getFileForSaving: the Adobe host would show a save dialog. The playground picked ' + p + '. Written content appears in the Console.');
           return Promise.resolve(makeFile(p));
         });
       },
@@ -1410,22 +1410,92 @@
   function premiereRead(name, value) {
     return hostCall('premierepro', name, [], function () { return value; });
   }
+  var premiereTypes = { BIN: 2, CLIP: 1, SEQUENCE: 3 };
+  var premiereLocked = false;
+  var premiereEmpty = BOOT.scenario === 'empty-sequence';
+  function premiereMarker(name, seconds, comments, type, duration) {
+    return {
+      getName: function () { return name; },
+      getStart: function () { return { seconds: seconds }; },
+      getComments: function () { return comments; },
+      getType: function () { return type || 'Comment'; },
+      getDuration: function () { return duration || { seconds: 0 }; }
+    };
+  }
+  function premiereAction(method, args, apply) {
+    return hostCall('premierepro', method, args, function () {
+      if (!premiereLocked) throw new Error('Requires locked access');
+      return { apply: apply };
+    });
+  }
+  function premiereBin(name, items) {
+    var children = items || [];
+    return {
+      type: premiereTypes.BIN,
+      name: name,
+      getItems: function () { return Promise.resolve(premiereRead('FolderItem.getItems', children.slice())); },
+      createBinAction: function (binName) {
+        return premiereAction('FolderItem.createBinAction', [binName], function () {
+          children.push(premiereBin(binName));
+        });
+      },
+      createMoveItemAction: function (item, newParent) {
+        return premiereAction('FolderItem.createMoveItemAction', [item.name, newParent.name], function () {
+          var index = children.indexOf(item);
+          if (index < 0) return;
+          children.splice(index, 1);
+          newParent.addItem(item);
+        });
+      },
+      addItem: function (item) { children.push(item); }
+    };
+  }
+  function premiereClip(name) {
+    return {
+      type: premiereTypes.CLIP, name: name,
+      getId: function () { return name; },
+      isSequence: function () { return Promise.resolve(false); },
+      getMediaFilePath: function () { return Promise.resolve(premiereRead('ClipProjectItem.getMediaFilePath', '/mock-media/' + name)); }
+    };
+  }
+  var premiereRoot = premiereBin('Project', [
+    premiereBin('Footage'), premiereBin('Audio'), { type: premiereTypes.SEQUENCE, name: 'Sequence 01' },
+    premiereClip('Interview.mov'), premiereClip('Room tone.wav'), premiereClip('Title still.png')
+  ]);
+  var premiereMarkers = premiereEmpty ? [] : [
+    premiereMarker('Opening', 0, 'Start with the wide shot'),
+    premiereMarker('Review cut', 23.5, 'Check the music, then confirm "approved"')
+  ];
   var premiereSequence = {
     name: 'Sequence 01',
     getVideoTrackCount: function () { return premiereRead('Sequence.getVideoTrackCount', 3); },
     getAudioTrackCount: function () { return premiereRead('Sequence.getAudioTrackCount', 4); },
-    getEndTime: function () { return premiereRead('Sequence.getEndTime', { seconds: 62.5 }); }
+    getEndTime: function () { return Promise.resolve(premiereRead('Sequence.getEndTime', { seconds: premiereEmpty ? 0 : 62.5 })); }
   };
+  var premiereSocialSequence = { ...premiereSequence, name: 'Social cut' };
+  var premiereMarkerLists = new WeakMap([[premiereSequence, premiereMarkers]]);
   var premierepro = {
+    ProjectItem: { TYPE_BIN: premiereTypes.BIN, TYPE_CLIP: premiereTypes.CLIP },
+    ClipProjectItem: { cast: function (item) { return item.type === premiereTypes.CLIP ? item : null; } },
+    FolderItem: { cast: function (item) { return item.type === premiereTypes.BIN ? item : null; } },
+    TickTime: { createWithSeconds: function (seconds) { return { seconds: seconds }; } },
     Markers: {
       getMarkers: function (sequence) {
         return Promise.resolve(hostCall('premierepro', 'Markers.getMarkers', [sequence.name], function () {
+          var markers = premiereMarkerLists.get(sequence);
+          if (!markers) {
+            markers = [];
+            premiereMarkerLists.set(sequence, markers);
+          }
           return {
-            getMarkers: function () {
-              return premiereRead('Markers.getMarkers (collection)', [
-                { getName: function () { return 'Opening'; }, getStart: function () { return { seconds: 0 }; } },
-                { getName: function () { return 'Review cut'; }, getStart: function () { return { seconds: 23.5 }; } }
-              ]);
+            getMarkers: function (filters) {
+              return premiereRead('Markers.getMarkers (collection)', filters
+                ? markers.filter(function (marker) { return filters.includes(marker.getType()); }) : markers.slice());
+            },
+            createAddMarkerAction: function (name, type, start, duration, comments) {
+              return premiereAction('Markers.createAddMarkerAction', [name, type, start, duration, comments], function () {
+                markers.push(premiereMarker(name, start ? start.seconds : 0, comments || '', type, duration));
+              });
             }
           };
         }));
@@ -1436,18 +1506,33 @@
         return hostCall('premierepro', 'Project.getActiveProject', [], function () {
           return Promise.resolve({
             name: 'Mock Project.prproj',
+            guid: 'uxp-playground-mock-project',
+            lockedAccess: function (callback) {
+              return hostCall('premierepro', 'Project.lockedAccess', [], function () {
+                premiereLocked = true;
+                try { callback(); } finally { premiereLocked = false; }
+              });
+            },
+            executeTransaction: function (callback, undoLabel) {
+              return hostCall('premierepro', 'Project.executeTransaction', [undoLabel], function () {
+                var actions = [];
+                var wasLocked = premiereLocked;
+                premiereLocked = true;
+                try {
+                  callback({ addAction: function (action) { actions.push(action); } });
+                  actions.forEach(function (action) { action.apply(); });
+                  return true;
+                } finally { premiereLocked = wasLocked; }
+              });
+            },
             getActiveSequence: function () {
-              return hostCall('premierepro', 'Project.getActiveSequence', [], function () { return Promise.resolve(premiereSequence); });
+              return Promise.resolve(premiereRead('Project.getActiveSequence', BOOT.scenario === 'no-active-sequence' ? null : premiereSequence));
             },
             getSequences: function () {
-              return Promise.resolve(premiereRead('Project.getSequences', [premiereSequence, { ...premiereSequence, name: 'Social cut' }]));
+              return Promise.resolve(premiereRead('Project.getSequences', [premiereSequence, premiereSocialSequence]));
             },
             getRootItem: function () {
-              return Promise.resolve(premiereRead('Project.getRootItem', {
-                getItems: function () {
-                  return Promise.resolve(premiereRead('FolderItem.getItems', [{ name: 'Footage' }, { name: 'Audio' }, { name: 'Sequence 01' }]));
-                }
-              }));
+              return Promise.resolve(premiereRead('Project.getRootItem', premiereRoot));
             },
             importFiles: function (paths, suppressUI) {
               return hostCall('premierepro', 'Project.importFiles', [paths, suppressUI], function () {
@@ -1671,7 +1756,12 @@
     define('sp-button', class extends Base('<button part="button" class="btn"><slot name="icon"></slot><slot></slot></button>') {
       static get observedAttributes() { return ['disabled']; }
       connectedCallback() { this.setAttribute('role', 'button'); if (!this.hasAttribute('tabindex')) this.tabIndex = 0; this.attributeChangedCallback(); }
-      attributeChangedCallback() { this.shadowRoot.querySelector('button').disabled = this.hasAttribute('disabled'); }
+      attributeChangedCallback() {
+        this.shadowRoot.querySelector('button').disabled = this.disabled;
+        this.setAttribute('aria-disabled', String(this.disabled));
+      }
+      get disabled() { return this.hasAttribute('disabled'); }
+      set disabled(value) { if (value) this.setAttribute('disabled', ''); else this.removeAttribute('disabled'); }
     });
     define('sp-action-button', class extends Base('<button part="button" class="abtn"><slot name="icon"></slot><slot></slot></button>') {
       static get observedAttributes() { return ['disabled']; }

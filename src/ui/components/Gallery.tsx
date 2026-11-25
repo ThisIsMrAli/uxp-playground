@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Icon } from './Icon';
 import { templateHash, TEMPLATES } from '../../core/templates';
 import { HOSTS, hostInfo, type HostApp } from '../../core/hosts';
+import { nativeCheck } from './RecipeGuide';
 
 export interface ExampleMeta {
   id: string;
@@ -47,9 +48,11 @@ type GalleryProps = {
 };
 
 const starters = TEMPLATES.map((t) => ({
-  id: t.id, title: t.label, description: t.description, category: 'Starters', tags: t.tags || [],
+  id: t.id, title: t.label, description: t.description,
+  category: t.recipe?.task === 'review' ? 'Review a cut' : t.recipe?.task === 'organize' ? 'Organize footage' : 'Starters',
+  tags: t.tags || [],
   host: t.host ?? 'PS', kind: 'template' as const, template: t
-}));
+})).sort((a, b) => Number(Boolean(b.template.recipe)) - Number(Boolean(a.template.recipe)));
 
 export function Gallery({ onOpenExample, onOpenTemplate, onCopyLink, target, compact }: GalleryProps) {
   const [index, setIndex] = useState<ExampleIndex | null>(null);
@@ -66,7 +69,7 @@ export function Gallery({ onOpenExample, onOpenTemplate, onCopyLink, target, com
   const cats = ['All', ...new Set(available.map((x) => x.category))];
   const hostLabel = (app: HostApp | 'shared') => app === 'shared' ? 'Shared UXP · ' + hostInfo(sharedHost)?.label : hostInfo(app)?.label;
   const query = q.trim().toLowerCase();
-  const shown = available.filter((x) => (cat === 'All' || x.category === cat) && [x.title, x.description, hostLabel(x.host), ...x.tags].join(' ').toLowerCase().includes(query));
+  const shown = available.filter((x) => (cat === 'All' || x.category === cat) && [x.title, x.description, x.category, hostLabel(x.host), ...x.tags].join(' ').toLowerCase().includes(query));
   return (
     <div className={'gallery' + (compact ? ' compact' : '')} data-testid="gallery">
       <div className="gallery-bar">
@@ -79,7 +82,7 @@ export function Gallery({ onOpenExample, onOpenTemplate, onCopyLink, target, com
         </label>
         <div className="search-box">
           <Icon name="search" size={14} />
-          <input placeholder="Search examples (batchPlay, React, file…)" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search examples" />
+          <input placeholder="Search examples (markers, bins, batchPlay…)" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search examples" />
         </div>
         <div className="seg" role="tablist" aria-label="Category">
           {cats.map((c) => (
@@ -98,6 +101,7 @@ export function Gallery({ onOpenExample, onOpenTemplate, onCopyLink, target, com
               <span className="card-cat">{hostLabel(x.host)}</span>
               <strong className="card-title">{x.title}</strong>
               <span className="card-desc">{x.description}</span>
+              {x.kind === 'template' && x.template.recipe && <span className="muted small">{nativeCheck(x.id) ? `Tested in Premiere Pro ${nativeCheck(x.id)?.version}` : 'Native check pending'}</span>}
               <span className="card-tags">
                 {x.tags.slice(0, 4).map((t) => (
                   <span key={t} className="chip">{t}</span>
@@ -119,6 +123,7 @@ export function Gallery({ onOpenExample, onOpenTemplate, onCopyLink, target, com
       </ul>
       {(host === 'all' || host === 'premierepro') && <p className="muted small gallery-foot"><a href="https://github.com/AdobeDocs/uxp-premiere-pro-samples" target="_blank" rel="noreferrer">More Premiere Pro samples from Adobe</a></p>}
       {index && (host === 'all' || host === 'PS') && <p className="muted small gallery-foot">{index.source}</p>}
+      <p className="muted small gallery-foot"><a href="https://github.com/ThisIsMrAli/uxp-playground/issues/new?template=example.yml" target="_blank" rel="noreferrer">Contribute an example</a></p>
     </div>
   );
 }

@@ -1,0 +1,30 @@
+name: Suggest a playground example
+description: Share an Adobe UXP example for the gallery.
+title: "[Example] "
+body:
+  - type: input
+    id: link
+    attributes:
+      label: Playground link
+      description: Open the working example and use Share to copy its link.
+    validations:
+      required: true
+  - type: input
+    id: attribution
+    attributes:
+      label: Author and license
+      description: Include the credit to display, and link to the source and license if you adapted someone else's work.
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow
+      description: Describe who needs this, the sample input, the steps to try it, and the expected result.
+    validations:
+      required: true
+  - type: textarea
+    id: native
+    attributes:
+      label: Adobe app verification
+      description: List the Adobe app, version, operating system, and behavior you checked. Attach a screenshot if you can use a disposable project.

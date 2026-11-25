@@ -1,0 +1,34 @@
+import { expect, test } from '@playwright/test';
+
+test('Reproduction links preserve the selected mock data and explicitly shared output', async ({ page }) => {
+  await page.goto('/#template=premiere-marker-csv');
+  await page.getByLabel('Mock data').selectOption('no-active-sequence');
+  const frame = page.frameLocator('[data-testid="preview-frame"]');
+  await expect(page.getByTestId('preview-col')).toHaveAttribute('data-ready-run', /[2-9]|\d{2,}/);
+  await frame.locator('#preview').click();
+  await expect(frame.locator('#status')).toHaveText('Open a sequence first.');
+  await page.getByTestId('share').click();
+  await page.getByRole('button', { name: 'Share a reproduction' }).click();
+  await page.getByLabel('Steps to reproduce').fill('Click Preview CSV.');
+  await page.getByLabel('Expected result').fill('List the review markers.');
+  await page.getByLabel('Actual result').fill('The panel asks for an open sequence.');
+  await page.getByLabel('Adobe app version tested').fill('26.5.2');
+  await page.getByText('Preview output (0 selected)').click();
+  const logs = page.getByTestId('reproduction-dialog').getByRole('checkbox');
+  await expect(logs.first()).toBeVisible();
+  const selected = (await logs.first().locator('..').innerText()).trim();
+  await logs.first().check();
+  await page.getByRole('button', { name: 'Create reproduction link' }).click();
+  const url = await page.getByLabel('Reproduction URL').inputValue();
+  await page.goto(url);
+  await expect(page.getByLabel('Mock data')).toHaveValue('no-active-sequence');
+  await page.getByRole('button', { name: 'Reproduction notes' }).click();
+  const notes = page.getByTestId('reproduction-notes');
+  await expect(notes).toContainText('Click Preview CSV.');
+  await expect(notes).toContainText('26.5.2');
+  await expect(notes.getByRole('listitem')).toHaveCount(1);
+  await expect(notes.getByRole('listitem')).toHaveText(selected);
+  await notes.getByRole('button', { name: 'Share an updated reproduction' }).click();
+  await expect(page.getByLabel('Expected result')).toHaveValue('List the review markers.');
+  await expect(page.getByText('Preview output (0 selected)')).toBeVisible();
+});

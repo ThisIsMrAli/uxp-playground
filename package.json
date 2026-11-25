@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "@adobe/cc-ext-uxp-types": "7.3.1",
+    "@adobe/premierepro": "27.0.0",
     "@playwright/test": "1.65.1",
     "@types/node": "^24.19.2",
     "@types/photoshop": "27.11.0",

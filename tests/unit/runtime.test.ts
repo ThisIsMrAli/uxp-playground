@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
 import { buildPreview } from '../../src/core/buildPreview';
+import type { PreviewScenario } from '../../src/core/scenarios';
 import { templateById } from '../../src/core/templates';
 import type { Project } from '../../src/core/types';
 
@@ -14,8 +15,8 @@ const assets = {
   psApi: JSON.parse(readFileSync(resolve('src/generated/ps-api.json'), 'utf8'))
 };
 
-function boot(p: Project) {
-  const { html } = buildPreview(p, assets);
+function boot(p: Project, scenario?: PreviewScenario) {
+  const { html } = buildPreview(p, assets, scenario);
   const messages: any[] = [];
   const dom = new JSDOM(html, {
     runScripts: 'dangerously',
@@ -121,6 +122,74 @@ describe('preview runtime (jsdom)', () => {
     const { win, hostCalls } = boot(p);
     expect(await win.result).toEqual([true, false, false]);
     expect(hostCalls().filter((c: any) => c.fn === 'Project.importFiles').map((c: any) => c.result)).toEqual([true, false, false]);
+  });
+
+  it('exports sample marker CSV with CRLF and escaped comments', async () => {
+    const { win, messages } = boot(templateById('premiere-marker-csv').build());
+    win.document.getElementById('save').click();
+    await tick();
+    expect(win.document.getElementById('status').textContent).toBe('Saved review-markers.csv.');
+    expect(messages.find(m => m.type === 'file-written')?.payload.content).toBe(
+      'seconds,name,comments\r\n0.000,"Opening","Start with the wide shot"\r\n' +
+      '23.500,"Review cut","Check the music, then confirm ""approved"""\r\n'
+    );
+    win.close();
+  });
+
+  it.each([
+    ['empty-sequence', 'No sequence markers to export.'],
+    ['no-active-sequence', 'Open a sequence first.']
+  ] as const)('reports the %s marker scenario without writing a file', async (scenario, status) => {
+    const { win, messages } = boot(templateById('premiere-marker-csv').build(), scenario);
+    win.document.getElementById('save').click();
+    await tick();
+    expect(win.document.getElementById('status').textContent).toBe(status);
+    expect(messages.some(m => m.type === 'file-written')).toBe(false);
+    win.close();
+  });
+
+  it('validates review notes and writes distinct markers in one Premiere transaction', async () => {
+    const { win, hostCalls } = boot(templateById('premiere-review-notes').build());
+    const notes = win.document.getElementById('notes');
+    const sample = notes.value;
+    const status = win.document.getElementById('status');
+    const apply = win.document.getElementById('apply');
+    notes.value = sample + '\n60:99 | Invalid';
+    apply.click();
+    await tick();
+    expect(status.textContent).toBe('Check the timestamp and title on line 3.');
+    expect(hostCalls().filter((call: any) => call.fn === 'Project.executeTransaction')).toHaveLength(0);
+    notes.value = sample;
+    apply.click();
+    await tick();
+    expect(status.textContent).toBe('Added 2 sequence markers.');
+    expect(hostCalls().filter((call: any) => call.fn === 'Project.executeTransaction')).toHaveLength(1);
+    expect(hostCalls().filter((call: any) => call.fn === 'Markers.createAddMarkerAction').map((call: any) => call.args[0])).toEqual(['Opening pace', 'Check lower third']);
+    apply.click();
+    await tick();
+    expect(status.textContent).toBe('These review markers are already on the sequence.');
+    win.close();
+  });
+
+  it('scans and moves the sample media, creating only its missing bin', async () => {
+    const { win, hostCalls } = boot(templateById('premiere-organize-bins').build());
+    const scan = win.document.getElementById('preview');
+    const apply = win.document.getElementById('apply');
+    const status = win.document.getElementById('status');
+    expect(apply.disabled).toBe(true);
+    scan.click();
+    await tick();
+    expect(status.textContent).toBe('3 moves ready.');
+    expect(win.document.getElementById('output').textContent).toContain('Title still.png → Stills');
+    expect(hostCalls().filter((call: any) => call.fn === 'Project.executeTransaction')).toHaveLength(0);
+    apply.click();
+    await tick();
+    expect(status.textContent).toBe('Moved 3 items.');
+    expect(hostCalls().filter((call: any) => call.fn === 'FolderItem.createBinAction').map((call: any) => call.args)).toEqual([['Stills']]);
+    scan.click();
+    await tick();
+    expect(status.textContent).toBe('No recognized media at the project root.');
+    win.close();
   });
 
   it('resolves relative requires and JSON, and explains missing npm packages', async () => {

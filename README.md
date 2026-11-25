@@ -8,7 +8,7 @@ A browser playground for Adobe UXP plugins. Edit a plugin's files, see an **appr
 
 ## Features
 
-- **Multi-file editor** (Monaco): `manifest.json`, HTML, JS/JSX/TS, CSS and extra files or folders. Autocomplete and hovers come from the real Adobe typings (`@types/photoshop` 27.11.0, `@adobe/cc-ext-uxp-types` 7.3.1). `manifest.json` is checked against a manifest v5 schema.
+- **Multi-file editor** (Monaco) for `manifest.json`, HTML, JS/JSX/TS, CSS, and additional files. Autocomplete and hovers use Photoshop, Premiere Pro, and UXP type declarations. The editor checks manifest v5, warns when a documented Premiere API needs a later host version, and flags async callbacks in Premiere operations that run synchronously. [Adobe’s Premiere Pro API reference](https://developer.adobe.com/premiere-pro/uxp/ppro-reference/)
 - **Target selectors** for Photoshop, Premiere Pro, InDesign, Media Encoder, and After Effects Beta, plus UXP version, theme, and panel size.
 - **Live preview** in a sandboxed iframe (`allow-scripts allow-modals allow-forms`, no same-origin), framed like a host panel and labelled *Approximate*:
   - CommonJS `require` for the supported hosts' API modules, `uxp`, React, relative files, and JSON.
@@ -24,10 +24,11 @@ A browser playground for Adobe UXP plugins. Edit a plugin's files, see an **appr
   - Otherwise built-in fallback rules run.
   - Playground checks for the manifest are always on.
   - Results also show as editor squiggles.
-- **Examples gallery** with a host filter, a starter for each supported app, and shared file picker and settings examples for manifest v5 hosts. The gallery also includes Adobe's licensed Photoshop samples in `public/examples/`. Every sample can be opened from a link such as `#template=premiere-sequence` or `#template=file-picker&host=ID`.
-  - **Premiere Pro** examples inspect the active sequence, tracks, markers, project sequences, and project bin, or import an SRT file. They use Adobe's documented APIs. For larger reference panels, see [Adobe's Premiere Pro sample repository](https://github.com/AdobeDocs/uxp-premiere-pro-samples).
+- **Examples gallery** with host and task filters, a starter for each supported app, and shared file picker and settings examples for manifest v5 hosts. The gallery also includes Adobe's licensed Photoshop samples in `public/examples/`. Every sample can be opened from a link such as `#template=premiere-sequence` or `#template=file-picker&host=ID`.
+  - **Premiere Pro** recipes export review markers to CSV, add markers from time-stamped notes, and organize imported media into bins. Open **Recipe guide** for sample input, expected results, instructions for Premiere, and the native testing record. Select **Mock data** to try a sample sequence, an empty sequence, or a project with no active sequence. For larger reference panels, see [Adobe's Premiere Pro sample repository](https://github.com/AdobeDocs/uxp-premiere-pro-samples).
 - **Import**: a GitHub repo or sub-folder (`#github=owner/repo/path`; monorepos ask which plugin and download only that one), a `.zip`/`.ccx`, a local folder (drag and drop anywhere), a public gist or a `playground.json`. Projects built with webpack/Vite get a small loader stub and a note instead of a blank panel.
 - **Share link**: the whole project is lz-string compressed into the URL hash, so nothing is uploaded. The share dialog shows the link size and which large binaries were left out. You can also save and open `playground.json`.
+- **Share a reproduction** adds steps, expected and actual results, an optional host version, and the preview output lines you select. The recipient can read **Reproduction notes**, edit the project, and share an updated reproduction.
 - **Embed mode** for docs pages and blogs: `?embed=1` with `view=split|preview|editor`, `readonly=1`, `theme=light|dark`, `console=1`. Embeds never write the reader's storage and have an *Open in Playground* link. A host page can drive an embed with `postMessage` (`uxp-playground:load`, `:run`, `:set-file`; the embed answers `uxp-playground:ready` and `:ran`).
 - **batchPlay inspector**: each batchPlay call in the Host calls log is described in plain words, with the descriptors as a tree, copy buttons, generated replay code and a re-run button.
 - **Workbench**: file tree with folders, tabs, resizable panes, command palette (`Ctrl/⌘+Shift+P`, files with `Ctrl/⌘+P`), keyboard shortcuts (`Ctrl/⌘+Shift+/`), light and dark UI, a phone layout, and a welcome screen on first visit.
@@ -67,6 +68,14 @@ The page exposes `window.uxpPlayground` (`importFiles`, `getProject`, `setProjec
 4. In UDT, choose **Add Plugin**, select the extracted `manifest.json`, then click **Load**. In Premiere Pro and Media Encoder, reopen the panel from **Window → UXP Plugins**.
 
 The hosted playground supports editing, browser previews, imports, sharing, and ZIP export online. Running a plugin inside an Adobe app uses the desktop app and UDT. [Adobe’s UXP Developer Tool guide](https://developer.adobe.com/uxp/guides/how-to/udt-deep-dive/)
+
+### Sync while you edit
+
+In a desktop browser with folder access, open **Run in host** and choose **Choose folder and sync**. Select an empty folder. Add the generated `manifest.json` to UDT once and select **Load & Watch**. Use **Sync now** after an edit or enable automatic sync for the current session. When the manifest changes, unload and load the plugin again in UDT. ZIP export remains available in any supported browser. [Adobe’s Load & Watch workflow](https://developer.adobe.com/uxp/guides/how-to/udt-deep-dive/plugin-workflows)
+
+### Contribute an example
+
+Share a small working project with sample input, expected output, an author and license, and the Adobe app version you tested. For examples of a problem, choose **Share a reproduction** and select the preview output you want to include. [Submit a gallery example on GitHub](https://github.com/ThisIsMrAli/uxp-playground/issues/new?template=example.yml)
 
 GitHub Actions builds and deploys the static `dist/` directory to GitHub Pages on pushes to `main`.
 

@@ -11,7 +11,7 @@ export interface Diagnostic {
   severity: 'error' | 'warning' | 'info';
   ruleId: string;
   message: string;
-  source: 'manifest' | 'css' | 'eslint' | 'compile';
+  source: 'manifest' | 'css' | 'eslint' | 'compile' | 'compatibility';
   /** Rule documentation (meta.docs.url of the ESLint rule). */
   docsUrl?: string;
 }

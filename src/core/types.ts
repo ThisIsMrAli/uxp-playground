@@ -1,4 +1,5 @@
 import type { HostApp } from './hosts';
+import type { PreviewScenario } from './scenarios';
 
 export type { HostApp } from './hosts';
 export type Theme = 'darkest' | 'dark' | 'medium' | 'light' | 'lightest';
@@ -17,6 +18,8 @@ export interface Project {
   theme: Theme;
   /** Preview size in CSS px; null = use the manifest's preferredDockedSize. */
   size: { width: number; height: number } | null;
+  /** Optional fixture selection for supported hosts. */
+  scenario?: PreviewScenario;
   files: Record<string, string>;
   active: string;
 }

@@ -2,6 +2,7 @@ import { compileModule, isScript, type CompiledModule, usesReact } from './compi
 import { parseManifest } from './manifest';
 import { HOSTS, hostInfo } from './hosts';
 import { isBinaryContent, resolveRelative } from './files';
+import type { PreviewScenario } from './scenarios';
 import type { Project } from './types';
 
 export interface RuntimeAssets {
@@ -70,7 +71,7 @@ function assetUrl(files: Record<string, string>, path: string): string | null {
 }
 
 /** Turns the project into one srcdoc HTML string for the sandboxed preview iframe. */
-export function buildPreview(p: Project, assets: RuntimeAssets): PreviewBuild {
+export function buildPreview(p: Project, assets: RuntimeAssets, scenario: PreviewScenario = 'sample'): PreviewBuild {
   const manifest = parseManifest(p.files['manifest.json']).value;
   const modules: Record<string, PreviewModule> = {};
   const compileErrors: PreviewBuild['compileErrors'] = [];
@@ -174,6 +175,7 @@ export function buildPreview(p: Project, assets: RuntimeAssets): PreviewBuild {
   const host = hostInfo(p.target.app);
   const boot = {
     manifest,
+    scenario,
     target: { app: p.target.app, uxp: p.target.uxp, hostVersion: host?.previewVersion },
     modules,
     sources: Object.fromEntries(Object.entries(p.files).filter(([, v]) => v.length < 2_000_000)),

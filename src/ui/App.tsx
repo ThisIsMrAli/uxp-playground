@@ -1,10 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Preview, postToPreview, type EntrypointInfo } from './Preview';
 import { buildTemplate, templateById, templateHash, TEMPLATES } from '../core/templates';
+import { PREMIERE_SCENARIOS, type PreviewScenario } from '../core/scenarios';
 import { buildPreview, type RuntimeAssets, type PreviewBuild } from '../core/buildPreview';
 import { buildPluginZip, readZip } from '../core/exportZip';
 import { panelSize, parseManifest, primaryHost, type Diagnostic } from '../core/manifest';
-import { readHash, sanitizeProject, share, validFileName } from '../core/share';
+import { readHash, sanitizeProject, share, validFileName, type Reproduction } from '../core/share';
 import { loadGist } from '../core/gist';
 import { importGithub, parseGithubSpec, specToString } from '../core/github';
 import { importTree, ImportError, type ImportReport, type RawFiles } from '../core/importer';
@@ -26,8 +27,11 @@ import { ManifestPanel } from './components/ManifestPanel';
 import { Gallery, loadExampleFiles, loadExampleIndex, type ExampleMeta } from './components/Gallery';
 import { ImportDialog } from './components/ImportDialog';
 import { ShareDialog } from './components/ShareDialog';
+import { ReproductionDetails, ReproductionDialog } from './components/ReproductionDialog';
+import { RecipeGuide, templateFromManifest } from './components/RecipeGuide';
 import { Welcome } from './components/Welcome';
 import { HostDialog } from './components/HostDialog';
+import { useFolderSync } from './useFolderSync';
 import runtimeSrc from '../runtime/runtime.js?raw';
 import panelCss from '../runtime/panel.css?raw';
 import shimCss from '../runtime/shim.css?raw';
@@ -47,6 +51,9 @@ function loadVendor(): Promise<string> {
 function mayUseReact(files: Record<string, string>): boolean {
   return Object.entries(files).some(([k, v]) => /\.(jsx|tsx)$/i.test(k) || (/\.(js|mjs|cjs|ts)$/i.test(k) && /['"]react(-dom)?(\/[\w-]+)?['"]/.test(v)));
 }
+async function vendorForProject(project: Project): Promise<string | null> {
+  return mayUseReact(project.files) ? loadVendor() : null;
+}
 const THEMES: Theme[] = ['darkest', 'dark', 'medium', 'light', 'lightest'];
 const SIZES = [
   { id: 'manifest', label: 'Manifest size' },
@@ -63,7 +70,7 @@ const DOCS = {
 
 type BottomTab = 'console' | 'host' | 'problems' | 'manifest' | 'about';
 type MobileView = 'files' | 'code' | 'preview' | 'output';
-type DialogId = 'import' | 'share' | 'shortcuts' | 'gallery' | 'run-host' | null;
+type DialogId = 'import' | 'share' | 'reproduce' | 'reproduction-notes' | 'recipe' | 'shortcuts' | 'gallery' | 'run-host' | null;
 interface Banner {
   kind: 'info' | 'warn' | 'error';
   text: string;
@@ -90,10 +97,10 @@ function sizeIdOf(p: Project) {
   return p.size ? `${p.size.width}x${p.size.height}` : 'manifest';
 }
 
-function initialState(): { project: Project; pending: ReturnType<typeof readHash> | 'idb' | null; source: string } {
+function initialState(): { project: Project; pending: ReturnType<typeof readHash> | 'idb' | null; source: string; reproduction?: Reproduction } {
   const h = readHash(location.hash);
   const start = templateById('hello').build();
-  if (h?.kind === 'state') return h.project ? { project: h.project, pending: null, source: 'share link' } : { project: start, pending: null, source: 'bad-link' };
+  if (h?.kind === 'state') return h.project ? { project: h.project, pending: null, source: 'share link', reproduction: h.reproduction } : { project: start, pending: null, source: 'bad-link' };
   if (h) return { project: start, pending: h, source: h.kind };
   if (!EMBED) {
     const saved = loadSavedSync();
@@ -112,10 +119,14 @@ function rawFromApi(files: Record<string, string | { text?: string; base64?: str
 export function App() {
   const init = useMemo(initialState, []);
   const [project, setProject] = useState<Project>(init.project);
+  const [reproduction, setReproduction] = useState<Reproduction | undefined>(init.reproduction);
   const [revision, setRevision] = useState(0);
+  const [projectSession, setProjectSession] = useState(0);
   const [tabs, setTabs] = useState<string[]>(() => [...new Set(['manifest.json', init.project.active])].filter((f) => init.project.files[f] != null));
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
+  const [lintDiagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
+  const [compatibilityDiagnostics, setCompatibilityDiagnostics] = useState<Diagnostic[]>([]);
+  const diagnostics = useMemo(() => [...lintDiagnostics, ...compatibilityDiagnostics], [lintDiagnostics, compatibilityDiagnostics]);
   const [lintInfo, setLintInfo] = useState<LintResponse['engine'] | null>(null);
   const [bottomTab, setBottomTab] = useState<BottomTab>(EMBED && params.get('console') === '1' ? 'console' : 'console');
   const [sizeId, setSizeId] = useState(sizeIdOf(init.project));
@@ -166,7 +177,9 @@ export function App() {
       setRoutePending(false);
       setReady(false); // the preview shows the previous project until the new build runs
       setProject(p);
+      setReproduction(undefined);
       setRevision((r) => r + 1);
+      setProjectSession((s) => s + 1);
       setTabs([...new Set(['manifest.json', p.active])].filter((f) => p.files[f] != null));
       setSizeId(sizeIdOf(p));
       setImportReport(opts.report ?? null);
@@ -361,6 +374,8 @@ export function App() {
   // ---------------------------------------------------------------- derived
   const manifestParse = useMemo(() => parseManifest(project.files['manifest.json']), [project.files]);
   const manifest = manifestParse.value;
+  const exampleTemplate = templateFromManifest(manifest?.id);
+  const scenario = project.target.app === 'premierepro' ? project.scenario ?? 'sample' : 'sample';
   const size = useMemo(() => {
     if (sizeId === 'manifest') return panelSize(manifest);
     const [w, h] = sizeId.split('x').map(Number);
@@ -369,6 +384,8 @@ export function App() {
 
   // ---------------------------------------------------------------- preview build
   const [vendorReady, setVendorReady] = useState(false);
+  const buildScenario = useRef<PreviewScenario>('sample');
+  const folderSync = useFolderSync(project, projectSession, vendorForProject, say);
   const rebuild = useCallback(() => {
     if (!ASSETS.vendor && mayUseReact(project.files)) {
       setReady(false);
@@ -377,12 +394,13 @@ export function App() {
     }
     let b: PreviewBuild;
     try {
-      b = buildPreview(project, ASSETS);
+      b = buildPreview(project, ASSETS, scenario);
     } catch (e: any) {
       setLogs([{ kind: 'error', level: 'error', text: 'Preview build failed: ' + (e?.message || e), time: Date.now() }]);
       return;
     }
     setBuild(b);
+    buildScenario.current = scenario;
     setReady(false);
     const sys: LogEntry[] = b.compileErrors.map((e) => ({ kind: 'error', level: 'error', text: e.message, file: e.file, line: e.line, time: Date.now() }));
     if (!b.entryHtml && !b.headless) sys.push({ kind: 'system', level: 'warn', text: 'No plugin entry file to show. Check "main" in manifest.json.', file: 'manifest.json', time: Date.now() });
@@ -392,15 +410,15 @@ export function App() {
     setEntrypoints({ panels: [], commands: [], menus: {} });
     setMissingPackages(b.unresolvedPackages);
     setRunId((r) => r + 1);
-  }, [project, say]);
+  }, [project, say, scenario]);
 
   useEffect(() => {
     if (routePending) return;
-    if (!autoRun && build) return;
+    if (!autoRun && build && buildScenario.current === scenario) return;
     const t = window.setTimeout(rebuild, build ? 400 : 0);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.files, project.target, autoRun, vendorReady, routePending]);
+  }, [project.files, project.target, scenario, autoRun, vendorReady, routePending]);
 
   // Lint (worker, debounced).
   useEffect(() => {
@@ -681,7 +699,7 @@ export function App() {
     const onMsg = (e: MessageEvent) => {
       const d = e.data;
       if (!d || typeof d !== 'object' || typeof d.type !== 'string' || !d.type.startsWith('uxp-playground:')) return;
-      if (e.source === window) return;
+      if (!EMBED || e.source !== window.parent || e.source === window) return;
       if (d.type === 'uxp-playground:load' && d.project) api.setProject(d.project);
       else if (d.type === 'uxp-playground:load' && d.files) api.importFiles(d.files, { name: d.name });
       else if (d.type === 'uxp-playground:run') rebuild();
@@ -780,6 +798,7 @@ export function App() {
               files={project.files}
               active={project.active}
               diagnostics={diagnostics}
+              onCompatibilityDiagnostics={setCompatibilityDiagnostics}
               onChange={onEdit}
               revision={revision}
               theme={appTheme}
@@ -838,6 +857,20 @@ export function App() {
 
   const previewBody = (
     <div className="preview-body">
+      {!EMBED && (project.target.app === 'premierepro' || exampleTemplate || reproduction) && (
+        <div className="preview-context">
+          {project.target.app === 'premierepro' && <label className="field compact">
+            <span>Mock data</span>
+            <select value={scenario} onChange={(e) => setProject((p) => ({ ...p, scenario: e.target.value as PreviewScenario }))}>
+              {PREMIERE_SCENARIOS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </label>}
+          {exampleTemplate && (
+            <button className="btn small" onClick={() => setDialog('recipe')}>{exampleTemplate.recipe ? 'Recipe guide' : 'Host verification'}</button>
+          )}
+          {reproduction && <button className="btn small" onClick={() => setDialog('reproduction-notes')}>Reproduction notes</button>}
+        </div>
+      )}
       {banner && (
         <div className={'banner ' + banner.kind} role={banner.kind === 'error' ? 'alert' : 'status'} data-testid="banner">
           <div className="banner-main">
@@ -952,7 +985,7 @@ export function App() {
 
   // ---------------------------------------------------------------- embed layout
   if (EMBED) {
-    const openUrl = share(shareBase, projectForShare).url;
+    const openUrl = share(shareBase, projectForShare, undefined, reproduction).url;
     return (
       <div className={'app embed view-' + EMBED_VIEW} data-testid="embed">
         <header className="embed-bar">
@@ -1193,8 +1226,11 @@ export function App() {
           progress={loading}
         />
       )}
-      {dialog === 'share' && <ShareDialog project={projectForShare} base={shareBase} origin={origin} onClose={() => setDialog(null)} onCopied={(w) => say(w + ' copied')} />}
-      {dialog === 'run-host' && <HostDialog project={project} onClose={() => setDialog(null)} onDownload={doZip} />}
+      {dialog === 'share' && <ShareDialog project={projectForShare} base={shareBase} origin={origin} onClose={() => setDialog(null)} onCopied={(w) => say(w + ' copied')} onReproduce={() => setDialog('reproduce')} />}
+      {dialog === 'reproduce' && <ReproductionDialog project={projectForShare} base={shareBase} logs={logs} initial={reproduction} onClose={() => setDialog(null)} onCopy={copyText} />}
+      {dialog === 'reproduction-notes' && reproduction && <ReproductionDetails project={project} report={reproduction} onClose={() => setDialog(null)} onShare={() => setDialog('reproduce')} />}
+      {dialog === 'recipe' && exampleTemplate && <RecipeGuide template={exampleTemplate} scenario={scenario} host={project.target.app} onClose={() => setDialog(null)} onRun={() => setDialog('run-host')} />}
+      {dialog === 'run-host' && <HostDialog project={project} sync={folderSync} onClose={() => setDialog(null)} onDownload={doZip} />}
       {dialog === 'shortcuts' && <Shortcuts onClose={() => setDialog(null)} />}
       {palette != null && (
         <CommandPalette
@@ -1262,16 +1298,14 @@ function About({ host }: { host: { app?: string; minVersion?: string } }) {
   return (
     <div className="about">
       <p>
-        <strong>Real:</strong> your files, the manifest, the exported zip, ESLint with <code>eslint-plugin-uxp-lint</code>, the <code>@types/photoshop</code> typings used for autocomplete and for
-        flagging unknown APIs, and the JavaScript itself (it runs in your browser's engine, not UXP's).
+        The editor uses Adobe API declarations for Photoshop and Premiere Pro autocomplete. Your plugin's JavaScript runs in the browser, and the exported project can run in its Adobe app through UXP Developer Tool.
       </p>
       <p>
-        <strong>Approximated:</strong> Spectrum widgets, theme colours, sample data for each host, and UXP permission checks. Photoshop previews enforce the modal-scope rule for <code>apiVersion</code> 2.
+        The preview approximates Spectrum widgets, theme colours, host data, and UXP permission checks. Photoshop previews enforce the modal-scope rule for <code>apiVersion</code> 2.
         {host.minVersion && ` This manifest targets ${hostInfo(host.app)?.label ?? host.app} ${host.minVersion} or later.`}
       </p>
       <p>
-        <strong>Not simulated:</strong> UXP's layout engine and its CSS limits, host fonts, real batchPlay results for most events, history, real pixels, WebViews, entrypoint timeouts, the real file
-        system and consent prompts. Calls the mock does not implement are listed under Host calls as "not simulated".
+        Use the Adobe app to check native layout, fonts, real documents, and permission prompts. The Host calls tab identifies APIs the preview could not simulate.
       </p>
       <p className="muted small">Photoshop → UXP versions from Adobe's changelog: {PS_UXP_TABLE.map((r) => `PS ${r.ps} → UXP ${r.uxp}`).join(' · ')}.</p>
     </div>

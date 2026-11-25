@@ -1,10 +1,11 @@
 import * as monaco from '@pg/monaco';
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker';
-import TsWorker from 'monaco-editor/language/typescript/ts.worker.js?worker';
+import TsWorker from './typescript.worker?worker';
 import JsonWorker from 'monaco-editor/language/json/json.worker.js?worker';
 import CssWorker from 'monaco-editor/language/css/css.worker.js?worker';
 import HtmlWorker from 'monaco-editor/language/html/html.worker.js?worker';
 import { manifestSchema } from './manifestSchema';
+import { HOST_MODULE_DECLARATIONS, PREMIERE_TYPES_URI, type PremiereCompatibilityWorker } from './premiereEditor';
 
 (self as any).MonacoEnvironment = {
   getWorker(_id: string, label: string) {
@@ -44,21 +45,29 @@ export function loadTypings(): Promise<number> {
   ts.typescriptDefaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false, diagnosticCodesToIgnore: [2307, 2792, 7016] });
   ts.javascriptDefaults.setEagerModelSync(true);
   ts.typescriptDefaults.setEagerModelSync(true);
-  typingsLoaded = Promise.all(
-    Object.entries(typingFiles).map(async ([path, load]) => {
-      const content = await load();
-      const uri = 'file://' + path;
-      ts.javascriptDefaults.addExtraLib(content, uri);
-      ts.typescriptDefaults.addExtraLib(content, uri);
-    })
-  ).then(() => {
-    // The DefinitelyTyped package resolves as "photoshop"; uxp is a declared ambient module. Map premierepro/indesign loosely.
-    const extra = `declare module "premierepro" { const anyModule: any; export = anyModule; }\ndeclare module "indesign" { const anyModule: any; export = anyModule; }\n`;
-    ts.javascriptDefaults.addExtraLib(extra, 'file:///node_modules/@types/pg-stubs/index.d.ts');
-    ts.typescriptDefaults.addExtraLib(extra, 'file:///node_modules/@types/pg-stubs/index.d.ts');
-    return Object.keys(typingFiles).length;
+  typingsLoaded = Promise.all([
+    ...Object.entries(typingFiles).map(async ([path, load]) => ({ content: await load(), filePath: 'file://' + path })),
+    import('/node_modules/@adobe/premierepro/src/premierepro.d.ts?raw').then(({ default: content }) => ({ content, filePath: PREMIERE_TYPES_URI }))
+  ]).then((libs) => {
+    libs.push({ content: HOST_MODULE_DECLARATIONS, filePath: 'file:///node_modules/@types/pg-stubs/index.d.ts' });
+    ts.javascriptDefaults.setExtraLibs(libs);
+    ts.typescriptDefaults.setExtraLibs(libs);
+    // Flush the extra-library event before issuing the first custom worker request.
+    return new Promise<number>((resolve) => setTimeout(() => resolve(libs.length), 0));
   });
   return typingsLoaded;
+}
+
+export async function getPremiereCompatibility(uris: monaco.Uri[], minVersion: string) {
+  const files = uris.filter((uri) => !/\.d\.ts$/i.test(uri.path));
+  if (!files.length) return [];
+  await loadTypings();
+  const getWorker = files.some((uri) => languageFor(uri.path) === 'typescript')
+    ? await monaco.typescript.getTypeScriptWorker()
+    : await monaco.typescript.getJavaScriptWorker();
+  // Sync all project sources, including JS, so the worker can follow imports across files.
+  const worker = await getWorker(...uris) as unknown as PremiereCompatibilityWorker;
+  return worker.getPremiereCompatibility(files.map((uri) => uri.toString()), minVersion);
 }
 
 let schemaSet = false;

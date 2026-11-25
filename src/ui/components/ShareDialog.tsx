@@ -4,7 +4,7 @@ import { Icon } from './Icon';
 import { share, SHARE_URL_WARN } from '../../core/share';
 import type { Project } from '../../core/types';
 
-export function ShareDialog({ project, base, origin, onClose, onCopied }: { project: Project; base: string; origin: string | null; onClose: () => void; onCopied: (what: string) => void }) {
+export function ShareDialog({ project, base, origin, onClose, onCopied, onReproduce }: { project: Project; base: string; origin: string | null; onClose: () => void; onCopied: (what: string) => void; onReproduce: () => void }) {
   const [view, setView] = useState<'split' | 'preview' | 'editor'>('split');
   const [height, setHeight] = useState(480);
   const r = useMemo(() => share(base, project), [base, project]);
@@ -49,6 +49,11 @@ export function ShareDialog({ project, base, origin, onClose, onCopied }: { proj
             </div>
           </>
         )}
+      </section>
+      <section className="share-sec">
+        <h3>Debug together</h3>
+        <p className="muted small">Add reproduction steps, the expected result, and selected preview output to a project link.</p>
+        <button className="btn" onClick={onReproduce}>Share a reproduction</button>
       </section>
       <section className="share-sec">
         <h3>Embed</h3>

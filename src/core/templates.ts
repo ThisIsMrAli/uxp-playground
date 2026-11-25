@@ -1,5 +1,6 @@
 import type { Project } from './types';
 import { hostInfo, type HostApp } from './hosts';
+import { premiereRecipeDefinitions, premiereRecipeStyles, type PremiereRecipe } from './premiereRecipes';
 
 function manifest(opts: { id: string; name: string; panelId: string; label: string; main?: string; minVersion?: string; app?: HostApp; perms?: Record<string, unknown>; width?: number; height?: number; commands?: { id: string; label: string }[] }): string {
   const host = hostInfo(opts.app ?? 'PS')!;
@@ -267,6 +268,7 @@ export interface Template {
   description: string;
   tags?: string[];
   host?: HostApp | 'shared';
+  recipe?: PremiereRecipe;
   build: (app?: HostApp) => Project;
 }
 
@@ -829,7 +831,28 @@ function inspect() {
 }`)
 ];
 
-export const TEMPLATES: Template[] = [BASE_TEMPLATES[0], ...HOST_STARTERS, ...BASE_TEMPLATES.slice(1), ...EXTRA_TEMPLATES];
+const PREMIERE_RECIPES: Template[] = premiereRecipeDefinitions.map(({ id, label, description, heading, recipe, html, script, permissions }) => ({
+  id, label, description, recipe, host: 'premierepro', tags: ['recipe'],
+  build: () => project(label, {
+    'manifest.json': manifest({ id: 'pg.' + id, name: label, panelId: 'recipePanel', label, app: 'premierepro', perms: permissions, width: 340, height: 440 }),
+    'index.html': `<!DOCTYPE html>
+<html>
+  <head><link rel="stylesheet" href="styles.css" /></head>
+  <body>
+    <div class="recipe">
+      <sp-heading size="S">${heading}</sp-heading>
+      ${html}
+    </div>
+    <script src="index.js"></script>
+  </body>
+</html>
+`,
+    'index.js': script,
+    'styles.css': premiereRecipeStyles
+  }, 'index.js', 'premierepro')
+}));
+
+export const TEMPLATES: Template[] = [BASE_TEMPLATES[0], ...PREMIERE_RECIPES, ...HOST_STARTERS, ...BASE_TEMPLATES.slice(1), ...EXTRA_TEMPLATES];
 
 export function templateHash(template: Template, app: HostApp = 'PS'): string {
   return '#template=' + template.id + (template.host === 'shared' && app !== 'PS' ? '&host=' + app : '');

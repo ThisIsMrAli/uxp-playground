@@ -15,3 +15,12 @@ declare module 'eslint-plugin-uxp-lint/browser' {
 declare module '@pg/monaco' {
   export * from 'monaco-editor';
 }
+declare module 'monaco-editor/language/typescript/ts.worker.js' {
+  import type TypeScript from 'typescript';
+  export class TypeScriptWorker {
+    constructor(context: unknown, options: unknown);
+    getLanguageService(): TypeScript.LanguageService;
+  }
+  export function initialize(create: (context: unknown, options: unknown) => TypeScriptWorker): void;
+  export const ts: { typescript: typeof TypeScript };
+}

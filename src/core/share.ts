@@ -3,6 +3,7 @@ import type { Project } from './types';
 import { UXP_VERSIONS } from './versions';
 import { hostInfo, type HostApp } from './hosts';
 import { fileSize, isBinaryContent } from './files';
+import { PREMIERE_SCENARIOS } from './scenarios';
 
 const THEMES = ['darkest', 'dark', 'medium', 'light', 'lightest'];
 /** Real plugins (Adobe's samples, GitHub plugins) have dozens to hundreds of files. */
@@ -22,8 +23,35 @@ export function validFileName(name: string): boolean {
   return name.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..' && seg.trim() === seg);
 }
 
-export function encodeProject(p: Project): string {
-  const payload = { v: 1, n: p.name, t: p.target, th: p.theme, s: p.size, f: p.files, a: p.active };
+export const REPRO_TEXT_LIMIT = 2_000;
+export const REPRO_LOG_LIMIT = 30;
+export const REPRO_LOG_LENGTH = 500;
+
+export interface Reproduction {
+  steps: string;
+  expected: string;
+  actual: string;
+  hostVersion: string;
+  logs: string[];
+}
+
+function sanitizeReproduction(raw: Partial<Reproduction> | null): Reproduction | undefined {
+  if (!raw || typeof raw !== 'object') return;
+  const field = (value: unknown, max = REPRO_TEXT_LIMIT) => typeof value === 'string' ? value.trim().slice(0, max) : '';
+  const steps = field(raw.steps);
+  const expected = field(raw.expected);
+  if (!steps || !expected) return;
+  return {
+    steps,
+    expected,
+    actual: field(raw.actual),
+    hostVersion: field(raw.hostVersion, 80),
+    logs: Array.isArray(raw.logs) ? raw.logs.slice(0, REPRO_LOG_LIMIT).map((s) => field(s, REPRO_LOG_LENGTH)).filter(Boolean) : []
+  };
+}
+
+export function encodeProject(p: Project, reproduction?: Reproduction): string {
+  const payload = { v: 1, n: p.name, t: p.target, th: p.theme, s: p.size, f: p.files, a: p.active, sc: p.scenario, r: reproduction };
   return compressToEncodedURIComponent(JSON.stringify(payload));
 }
 
@@ -49,24 +77,35 @@ export function sanitizeProject(raw: any): Project | null {
   const theme = raw.theme ?? raw.th;
   const size = raw.size ?? raw.s;
   const active = raw.active ?? raw.a;
+  const app = hostInfo(t.app)?.id ?? 'PS';
+  const scenario = app === 'premierepro' ? PREMIERE_SCENARIOS.find(({ id }) => id === (raw.scenario ?? raw.sc))?.id : undefined;
   return {
     v: 1,
     name: typeof (raw.name ?? raw.n) === 'string' ? String(raw.name ?? raw.n).slice(0, 120) : 'Shared playground',
-    target: { app: hostInfo(t.app)?.id ?? 'PS', uxp: UXP_VERSIONS.includes(t.uxp) ? t.uxp : '9.2' },
+    target: { app, uxp: UXP_VERSIONS.includes(t.uxp) ? t.uxp : '9.2' },
     theme: THEMES.includes(theme) ? theme : 'dark',
     size: size && Number(size.width) > 0 && Number(size.height) > 0 ? { width: Math.min(2000, Number(size.width)), height: Math.min(2000, Number(size.height)) } : null,
+    ...(scenario && { scenario }),
     files: clean,
     active: typeof active === 'string' && clean[active] != null ? active : clean['manifest.json'] != null ? 'manifest.json' : Object.keys(clean)[0]
   };
 }
 
 export function decodeProject(encoded: string): Project | null {
+  return decodeState(encoded).project;
+}
+
+function decodeState(encoded: string): { project: Project | null; reproduction?: Reproduction } {
+  if (encoded.length > SHARE_URL_MAX) return { project: null };
   try {
     const json = decompressFromEncodedURIComponent(encoded);
-    if (!json) return null;
-    return sanitizeProject(JSON.parse(json));
+    if (!json) return { project: null };
+    const raw = JSON.parse(json);
+    const project = sanitizeProject(raw);
+    const reproduction = project ? sanitizeReproduction(raw.r) : undefined;
+    return { project, ...(reproduction && { reproduction }) };
   } catch {
-    return null;
+    return { project: null };
   }
 }
 
@@ -83,7 +122,7 @@ export function shareUrl(base: string, p: Project, extraParams?: Record<string, 
   return share(base, p, extraParams).url;
 }
 
-export function share(base: string, p: Project, extraParams?: Record<string, string>): ShareResult {
+export function share(base: string, p: Project, extraParams?: Record<string, string>, reproduction?: Reproduction): ShareResult {
   const omitted: string[] = [];
   const files: Record<string, string> = {};
   for (const [k, v] of Object.entries(p.files)) {
@@ -93,13 +132,13 @@ export function share(base: string, p: Project, extraParams?: Record<string, str
   const u = new URL(base);
   u.hash = '';
   for (const [k, v] of Object.entries(extraParams || {})) u.searchParams.set(k, v);
-  u.hash = 's=' + encodeProject({ ...p, files });
+  u.hash = 's=' + encodeProject({ ...p, files }, sanitizeReproduction(reproduction ?? null));
   const url = u.toString();
   return { url, omitted, length: url.length, status: url.length > SHARE_URL_MAX ? 'too-long' : url.length > SHARE_URL_WARN ? 'long' : 'ok' };
 }
 
 export type HashRoute =
-  | { kind: 'state'; project: Project | null }
+  | { kind: 'state'; project: Project | null; reproduction?: Reproduction }
   | { kind: 'gist'; id: string; file?: string }
   | { kind: 'github'; spec: string }
   | { kind: 'example'; id: string }
@@ -107,7 +146,7 @@ export type HashRoute =
 
 export function readHash(hash: string): HashRoute | null {
   const h = hash.replace(/^#/, '');
-  if (h.startsWith('s=')) return { kind: 'state', project: decodeProject(h.slice(2)) };
+  if (h.startsWith('s=')) return { kind: 'state', ...decodeState(h.slice(2)) };
   if (h.startsWith('gist=')) {
     const id = h.slice(5).replace(/[^A-Za-z0-9]/g, '');
     return id ? { kind: 'gist', id } : null;

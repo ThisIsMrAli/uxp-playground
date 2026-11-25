@@ -1,13 +1,15 @@
 import { useEffect, useRef } from 'react';
-import { languageFor, loadTypings, monaco, setupJson } from './monacoSetup';
-import type { Diagnostic } from '../core/manifest';
+import { getPremiereCompatibility, languageFor, loadTypings, monaco, setupJson } from './monacoSetup';
+import { parseManifest, primaryHost, type Diagnostic } from '../core/manifest';
 import { isBinaryContent } from '../core/files';
+import { SCRIPT_RE } from '../core/compile';
 
 interface Props {
   files: Record<string, string>;
   active: string;
   diagnostics: Diagnostic[];
   onChange: (path: string, value: string) => void;
+  onCompatibilityDiagnostics: (diagnostics: Diagnostic[]) => void;
   /** Bumped when files are replaced from outside (template, import), forcing model sync. */
   revision: number;
   theme: 'dark' | 'light';
@@ -19,7 +21,7 @@ interface Props {
 
 const uriFor = (path: string) => monaco.Uri.file('/' + path);
 
-export function Editor({ files, active, diagnostics, onChange, revision, theme, fontSize, readOnly, onRun, onPalette }: Props) {
+export function Editor({ files, active, diagnostics, onChange, onCompatibilityDiagnostics, revision, theme, fontSize, readOnly, onRun, onPalette }: Props) {
   const keys = useRef({ onRun, onPalette });
   keys.current = { onRun, onPalette };
   const host = useRef<HTMLDivElement>(null);
@@ -28,6 +30,7 @@ export function Editor({ files, active, diagnostics, onChange, revision, theme, 
   onChangeRef.current = onChange;
   const filesRef = useRef(files);
   filesRef.current = files;
+  const manifestText = files['manifest.json'];
 
   useEffect(() => {
     setupJson();
@@ -103,6 +106,33 @@ export function Editor({ files, active, diagnostics, onChange, revision, theme, 
     if (!model && files[active] != null && !isBinaryContent(files[active])) model = monaco.editor.createModel(files[active], languageFor(active), uriFor(active));
     if (model && ed.getModel() !== model) ed.setModel(model);
   }, [active, revision, files]);
+
+  useEffect(() => {
+    onCompatibilityDiagnostics([]);
+  }, [manifestText, onCompatibilityDiagnostics]);
+
+  useEffect(() => {
+    const { app, minVersion } = primaryHost(parseManifest(manifestText).value, 'premierepro');
+    if (app !== 'premierepro' || typeof minVersion !== 'string' || !/^\d+(\.\d+){0,2}$/.test(minVersion)) {
+      return;
+    }
+    let current = true;
+    const timer = window.setTimeout(() => {
+      const paths = Object.keys(files).filter((path) => SCRIPT_RE.test(path) && !isBinaryContent(files[path]));
+      const uris = paths.map(uriFor);
+      getPremiereCompatibility(uris, minVersion).then((result) => {
+        if (current) onCompatibilityDiagnostics(result);
+      }).catch((error) => {
+        if (!current) return;
+        onCompatibilityDiagnostics([]);
+        console.warn('Premiere compatibility checks', error);
+      });
+    }, 300);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [files, manifestText, onCompatibilityDiagnostics]);
 
   useEffect(() => {
     const byFile = new Map<string, Diagnostic[]>();
