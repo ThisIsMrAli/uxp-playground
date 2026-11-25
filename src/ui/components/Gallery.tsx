@@ -117,7 +117,8 @@ export function Gallery({ onOpenExample, onOpenTemplate, onCopyLink, target, com
           </li>
         ))}
       </ul>
-      {index && <p className="muted small gallery-foot">{index.source}</p>}
+      {(host === 'all' || host === 'premierepro') && <p className="muted small gallery-foot"><a href="https://github.com/AdobeDocs/uxp-premiere-pro-samples" target="_blank" rel="noreferrer">More Premiere Pro samples from Adobe</a></p>}
+      {index && (host === 'all' || host === 'PS') && <p className="muted small gallery-foot">{index.source}</p>}
     </div>
   );
 }

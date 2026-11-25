@@ -1407,14 +1407,47 @@
     root.ImageBlob = ImageBlobImpl;
   }
 
+  function premiereRead(name, value) {
+    return hostCall('premierepro', name, [], function () { return value; });
+  }
+  var premiereSequence = {
+    name: 'Sequence 01',
+    getVideoTrackCount: function () { return premiereRead('Sequence.getVideoTrackCount', 3); },
+    getAudioTrackCount: function () { return premiereRead('Sequence.getAudioTrackCount', 4); },
+    getEndTime: function () { return premiereRead('Sequence.getEndTime', { seconds: 62.5 }); }
+  };
   var premierepro = {
+    Markers: {
+      getMarkers: function (sequence) {
+        return Promise.resolve(hostCall('premierepro', 'Markers.getMarkers', [sequence.name], function () {
+          return {
+            getMarkers: function () {
+              return premiereRead('Markers.getMarkers (collection)', [
+                { getName: function () { return 'Opening'; }, getStart: function () { return { seconds: 0 }; } },
+                { getName: function () { return 'Review cut'; }, getStart: function () { return { seconds: 23.5 }; } }
+              ]);
+            }
+          };
+        }));
+      }
+    },
     Project: {
       getActiveProject: function () {
         return hostCall('premierepro', 'Project.getActiveProject', [], function () {
           return Promise.resolve({
             name: 'Mock Project.prproj',
             getActiveSequence: function () {
-              return hostCall('premierepro', 'Project.getActiveSequence', [], function () { return Promise.resolve({ name: 'Sequence 01' }); });
+              return hostCall('premierepro', 'Project.getActiveSequence', [], function () { return Promise.resolve(premiereSequence); });
+            },
+            getSequences: function () {
+              return Promise.resolve(premiereRead('Project.getSequences', [premiereSequence, { ...premiereSequence, name: 'Social cut' }]));
+            },
+            getRootItem: function () {
+              return Promise.resolve(premiereRead('Project.getRootItem', {
+                getItems: function () {
+                  return Promise.resolve(premiereRead('FolderItem.getItems', [{ name: 'Footage' }, { name: 'Audio' }, { name: 'Sequence 01' }]));
+                }
+              }));
             },
             importFiles: function (paths, suppressUI) {
               return hostCall('premierepro', 'Project.importFiles', [paths, suppressUI], function () {

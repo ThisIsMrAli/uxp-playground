@@ -49,6 +49,10 @@ for (const ex of examples) {
 const hostStarters = [
   ['ID', 'indesign-pages', 'Mock Layout.indd · 3 pages'],
   ['premierepro', 'premiere-sequence', 'Mock Project.prproj · Sequence 01'],
+  ['premierepro', 'premiere-tracks', 'Video tracks: 3'],
+  ['premierepro', 'premiere-markers', '23.50 s · Review cut'],
+  ['premierepro', 'premiere-project-sequences', 'Social cut'],
+  ['premierepro', 'premiere-project-bin', 'Footage'],
   ['ame', 'media-encoder-queue', 'Queue stopped'],
   ['aftereffects', 'after-effects-project', '3 project items · Mock Composition']
 ];
@@ -58,10 +62,26 @@ for (const [host, id, summary] of hostStarters) {
     await fresh(page, '#template=' + id);
     await expect(page.getByTestId('host')).toHaveValue(host);
     await frame(page).locator('#refresh').click();
-    await expect(frame(page).locator('#summary')).toHaveText(summary);
+    await expect(frame(page).locator('#summary')).toContainText(summary);
     await expect(page.getByTestId('preview-col')).toHaveAttribute('data-errors', '0');
   });
 }
+
+test('Premiere subtitle example adds a picked SRT through the preview host API', async ({ page }) => {
+  await fresh(page, '#template=premiere-import-srt');
+  const [picker] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    frame(page).locator('#refresh').click()
+  ]);
+  await picker.setFiles({
+    name: 'sample.srt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('1\n00:00:00,000 --> 00:00:01,000\nHello!\n')
+  });
+  await expect(frame(page).locator('#summary')).toHaveText('Imported sample.srt');
+  await page.getByTestId('tab-host').click();
+  await expect(page.getByTestId('panel-host')).toContainText('Project.importFiles');
+});
 
 test('host gallery, shared starter link and native export agree on the manifest host', async ({ page }) => {
   await fresh(page);

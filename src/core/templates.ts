@@ -706,19 +706,19 @@ export const EXTRA_TEMPLATES: Template[] = [
   }
 ];
 
-function inspectorTemplate(app: HostApp, id: string, label: string, description: string, api: string): Template {
+function inspectorTemplate(app: HostApp, id: string, label: string, description: string, api: string, action?: { label: string; prompt: string; perms: Record<string, unknown> }): Template {
   return {
     id, label, description, host: app, tags: ['panel', 'host API'],
     build: () => project(label, {
-      'manifest.json': manifest({ id: 'pg.' + id, name: label, panelId: 'inspector', label, app }),
+      'manifest.json': manifest({ id: 'pg.' + id, name: label, panelId: 'inspector', label, app, perms: action?.perms }),
       'index.html': `<!DOCTYPE html>
 <html>
   <head><link rel="stylesheet" href="styles.css" /></head>
   <body>
     <div class="inspector">
       <sp-heading size="S">${label}</sp-heading>
-      <sp-body id="summary" size="S">Click Refresh to read from the host.</sp-body>
-      <sp-button id="refresh">Refresh</sp-button>
+      <sp-body id="summary" size="S">${action?.prompt ?? 'Click Refresh to read from the host.'}</sp-body>
+      <sp-button id="refresh">${action?.label ?? 'Refresh'}</sp-button>
     </div>
     <script src="index.js"></script>
   </body>
@@ -726,7 +726,7 @@ function inspectorTemplate(app: HostApp, id: string, label: string, description:
 `,
       'styles.css': `body { margin: 0; padding: 0; }
 .inspector { display: flex; flex-direction: column; align-items: flex-start; padding: 12px; }
-#summary { margin: 4px 0 12px; }
+#summary { margin: 4px 0 12px; white-space: pre-wrap; }
 `,
       'index.js': `${api}
 const summary = document.getElementById("summary");
@@ -751,6 +751,55 @@ async function inspect() {
   const sequence = await project.getActiveSequence();
   return project.name + " · " + (sequence ? sequence.name : "No active sequence");
 }`),
+  inspectorTemplate('premierepro', 'premiere-tracks', 'Premiere Pro track overview', 'Read video and audio track counts and the end time of the active sequence.', `const { Project } = require("premierepro");
+
+async function inspect() {
+  const project = await Project.getActiveProject();
+  const sequence = project && await project.getActiveSequence();
+  if (!sequence) return "Open a sequence and try again.";
+  const video = await sequence.getVideoTrackCount();
+  const audio = await sequence.getAudioTrackCount();
+  const end = await sequence.getEndTime();
+  return sequence.name + "\\nVideo tracks: " + video + "\\nAudio tracks: " + audio + "\\nEnd: " + end.seconds.toFixed(2) + " s";
+}`),
+  inspectorTemplate('premierepro', 'premiere-markers', 'Premiere Pro sequence markers', 'List the active sequence’s markers with timestamps.', `const { Project, Markers } = require("premierepro");
+
+async function inspect() {
+  const project = await Project.getActiveProject();
+  const sequence = project && await project.getActiveSequence();
+  if (!sequence) return "Open a sequence and try again.";
+  const collection = await Markers.getMarkers(sequence);
+  const markers = collection.getMarkers();
+  return markers.map(marker => marker.getStart().seconds.toFixed(2) + " s · " + (marker.getName() || "Untitled marker")).join("\\n") || "No sequence markers.";
+}`),
+  inspectorTemplate('premierepro', 'premiere-project-sequences', 'Premiere Pro project sequences', 'List the sequences in the current project.', `const { Project } = require("premierepro");
+
+async function inspect() {
+  const project = await Project.getActiveProject();
+  if (!project) return "Open a Premiere Pro project and try again.";
+  const sequences = await project.getSequences();
+  return sequences.map(sequence => sequence.name).join("\\n") || "No sequences in this project.";
+}`),
+  inspectorTemplate('premierepro', 'premiere-project-bin', 'Premiere Pro project bin', 'List items at the top level of the Project panel.', `const { Project } = require("premierepro");
+
+async function inspect() {
+  const project = await Project.getActiveProject();
+  if (!project) return "Open a Premiere Pro project and try again.";
+  const root = await project.getRootItem();
+  const items = await root.getItems();
+  return items.map(item => item.name).join("\\n") || "The project bin is empty.";
+}`),
+  inspectorTemplate('premierepro', 'premiere-import-srt', 'Premiere Pro subtitle import', 'Pick an SRT file and import it into the current project.', `const { Project } = require("premierepro");
+const { storage } = require("uxp");
+
+async function inspect() {
+  const project = await Project.getActiveProject();
+  if (!project) return "Open a Premiere Pro project and try again.";
+  const file = await storage.localFileSystem.getFileForOpening({ types: ["srt"] });
+  if (!file) return "No file selected.";
+  const imported = await project.importFiles([file.nativePath], true);
+  return imported ? "Imported " + file.name : "Premiere Pro could not import " + file.name;
+}`, { label: 'Choose SRT file', prompt: 'Choose a subtitle file to add it to the Project panel.', perms: { localFileSystem: 'request' } }),
   inspectorTemplate('ID', 'indesign-pages', 'InDesign document pages', 'Read the active document name and page count.', `const { app } = require("indesign");
 
 function inspect() {
