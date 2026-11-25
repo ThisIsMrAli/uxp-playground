@@ -231,6 +231,15 @@ test('import: zip with the plugin in a subfolder, and a clear error for a non-pl
 test('responsive: phone layout switches between code, preview and output', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await fresh(page);
+  await expect(page.getByRole('textbox', { name: 'Project name' })).toBeVisible();
+  await expect(page.getByTestId('host')).toBeVisible();
+  await expect(page.getByTestId('uxp')).toBeVisible();
+  const firstRow = (await page.getByTestId('examples').boundingBox())!;
+  const lastAction = (await page.getByTestId('app-theme').boundingBox())!;
+  expect(Math.abs(firstRow.y - lastAction.y)).toBeLessThan(4);
+  await page.getByTestId('host').selectOption('premierepro');
+  await expect(page.getByTestId('uxp')).toHaveValue('9.0');
+  await page.getByTestId('host').selectOption('PS');
   await page.locator('.mobile-tabs').getByRole('button', { name: /Preview/ }).click();
   await ready(page);
   await expect(frame(page).locator('sp-heading')).toHaveText('Hello UXP');

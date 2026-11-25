@@ -988,44 +988,46 @@ export function App() {
 
   const header = (
     <header className="header">
-      <button className="brand" onClick={() => setWelcome(true)} title="Welcome and examples">
+      <button className="brand" onClick={() => setWelcome(true)} title="Welcome and examples" aria-label="UXP Playground welcome">
         <span className="logo-mark" aria-hidden="true">Ux</span>
         <span className="brand-name">UXP Playground</span>
       </button>
-      <input className="project-name" value={project.name} onChange={(e) => setProject((p) => ({ ...p, name: e.target.value.slice(0, 80) }))} aria-label="Project name" spellCheck={false} />
-      <div className="target">
-        <label className="field compact">
-          <span className="sr-only">Host app</span>
-          <select data-testid="host" value={project.target.app} onChange={(e) => {
-            const host = hostInfo(e.target.value);
-            if (host) setProject((p) => ({ ...p, target: { app: host.id, uxp: host.uxp } }));
-          }} title="Host app to preview">
-            {HOSTS.map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field compact">
-          <span className="sr-only">UXP version</span>
-          <select data-testid="uxp" value={project.target.uxp} onChange={(e) => setProject((p) => ({ ...p, target: { ...p.target, uxp: e.target.value } }))} title="UXP version for lint rules">
-            {UXP_VERSIONS.map((v) => (
-              <option key={v} value={v}>
-                UXP {v}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="project-controls">
+        <input className="project-name" value={project.name} onChange={(e) => setProject((p) => ({ ...p, name: e.target.value.slice(0, 80) }))} aria-label="Project name" spellCheck={false} />
+        <div className="target">
+          <label className="field compact">
+            <span className="sr-only">Host app</span>
+            <select data-testid="host" value={project.target.app} onChange={(e) => {
+              const host = hostInfo(e.target.value);
+              if (host) setProject((p) => ({ ...p, target: { app: host.id, uxp: host.uxp } }));
+            }} title="Host app to preview">
+              {HOSTS.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field compact">
+            <span className="sr-only">UXP version</span>
+            <select data-testid="uxp" value={project.target.uxp} onChange={(e) => setProject((p) => ({ ...p, target: { ...p.target, uxp: e.target.value } }))} title="UXP version for lint rules">
+              {UXP_VERSIONS.map((v) => (
+                <option key={v} value={v}>
+                  UXP {v}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
       <span className="spacer" />
-      <button className="btn ghost" onClick={() => setDialog('gallery')} data-testid="examples">
+      <button className="btn ghost" onClick={() => setDialog('gallery')} data-testid="examples" aria-label="Examples" title="Examples">
         <Icon name="book" size={14} /> <span className="hide-sm">Examples</span>
       </button>
-      <button className="btn ghost" onClick={() => { setCandidates(null); setDialog('import'); }} data-testid="import">
+      <button className="btn ghost" onClick={() => { setCandidates(null); setDialog('import'); }} data-testid="import" aria-label="Import" title="Import">
         <Icon name="upload" size={14} /> <span className="hide-sm">Import</span>
       </button>
-      <button className="btn ghost" onClick={() => setDialog('share')} data-testid="share">
+      <button className="btn ghost" onClick={() => setDialog('share')} data-testid="share" aria-label="Share" title="Share">
         <Icon name="share" size={14} /> <span className="hide-sm">Share</span>
       </button>
       <div className="split-btn">

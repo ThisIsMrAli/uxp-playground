@@ -137,6 +137,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin-right: 3p
 .logo-mark.big { width: 52px; height: 52px; font-size: 21px; border-radius: 13px; }
 .project-name { height: 28px; width: 200px; background: transparent; border-color: transparent; font-weight: 600; margin-left: 6px; }
 .project-name:hover { border-color: var(--border); }
+.project-controls { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .target { display: flex; gap: 6px; margin-left: 4px; }
 .split-btn { display: inline-flex; }
 .split-btn .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
@@ -435,13 +436,19 @@ button.sb-item:hover { background: var(--bg-hover); color: var(--fg); }
 }
 @media (max-width: 860px) {
   .preview-toolbar { height: auto; min-height: 40px; flex-wrap: wrap; padding: 4px 8px; overflow: visible; }
-  .target, .project-name { display: none; }
-  .header { gap: 2px; }
+  .header { flex-wrap: wrap; height: auto; min-height: 48px; gap: 3px; padding: 6px 8px; }
+  .header > .btn, .header .split-btn .btn { height: 32px; padding-inline: 6px; }
+  .project-controls { order: 1; width: 100%; padding-top: 4px; }
+  .project-controls .project-name { flex: 1; min-width: 0; margin-left: 0; border-color: var(--border); }
+  .project-controls .target { margin-left: 0; }
   .welcome-actions { grid-template-columns: 1fr; }
   .welcome { padding: 20px 16px; }
   .dialog-backdrop { padding-top: 4vh; }
   .embed-main { flex-direction: column; }
   .embed.view-split .preview-col { width: auto; flex: 1; }
+}
+@media (max-width: 410px) {
+  .brand-name { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
