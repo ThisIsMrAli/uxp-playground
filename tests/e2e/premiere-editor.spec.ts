@@ -1,6 +1,31 @@
 import { expect, test } from '@playwright/test';
 import { fresh } from './helpers';
 
+test('the Premiere suggestion menu displays and inserts a marker API completion', async ({ page }) => {
+  await fresh(page, '#template=premiere-markers');
+  await page.evaluate(() => {
+    const editor = (window as any).__pgEditor;
+    (window as any).__pgReveal('index.js', 1, 1);
+    const model = editor.getModel();
+    const method = model.findMatches('Markers.getMarkers(sequence)', false, false, true, null, false)[0].range;
+    editor.setSelection({
+      startLineNumber: method.startLineNumber,
+      endLineNumber: method.startLineNumber,
+      startColumn: method.startColumn + 'Markers.'.length,
+      endColumn: method.startColumn + 'Markers.getMarkers'.length
+    });
+    editor.revealLineInCenter(method.startLineNumber);
+  });
+  await page.keyboard.type('getM');
+  // Explicitly open suggestions without depending on OS shortcuts or typing timing.
+  await page.evaluate(() => (window as any).__pgEditor.trigger('test', 'editor.action.triggerSuggest', {}));
+  const widget = page.locator('.suggest-widget.visible');
+  await expect(widget.getByRole('listitem', { name: 'getMarkers, Function' })).toBeVisible();
+  await expect(widget.locator(':scope > .tree')).toHaveCSS('padding-bottom', '0px');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => (window as any).__pgEditor.getModel().getValue())).toContain('Markers.getMarkers(sequence)');
+});
+
 test('Premiere has typed JavaScript completions and warns about APIs newer than the manifest', async ({ page }) => {
   await fresh(page, '#template=premiere-sequence');
   const code = [

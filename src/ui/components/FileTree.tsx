@@ -170,7 +170,7 @@ export function FileTree({
           <input autoFocus aria-label="New file name" placeholder="utils.js or lib/helpers.js" value={editing.value} onChange={(e) => setEditing({ ...editing, value: e.target.value })} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(null); }} data-testid="new-file-name" />
         </div>
       )}
-      <ul className="tree" aria-label="Project files">
+      <ul className="file-tree-list" aria-label="Project files">
         {render(tree, 0)}
       </ul>
     </div>
